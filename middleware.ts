@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/reset-password", "/verify-email"];
+const PUBLIC_PATHS = ["/login", "/reset-password"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(
@@ -29,8 +29,6 @@ export function middleware(request: NextRequest) {
   const isPublic = isPublicPath(pathname);
   const isPasswordResetWithToken =
     pathname.startsWith("/reset-password") && searchParams.has("token");
-  const isEmailVerifyWithToken =
-    pathname.startsWith("/verify-email") && searchParams.has("token");
 
   if (!isAuthenticated && !isPublic) {
     const loginUrl = request.nextUrl.clone();
@@ -39,13 +37,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (
-    isAuthenticated &&
-    isPublic &&
-    !isPasswordResetWithToken &&
-    !isEmailVerifyWithToken &&
-    pathname !== "/verify-email"
-  ) {
+  if (isAuthenticated && isPublic && !isPasswordResetWithToken) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/home";
     homeUrl.search = "";

@@ -69,7 +69,6 @@ export function useAuth() {
         error: {
           message: fieldErrorMessage(response.formFields, "Invalid input"),
         } as AuthError,
-        needsVerification: false,
       };
     }
     if (response.status === "SIGN_UP_NOT_ALLOWED") {
@@ -77,11 +76,10 @@ export function useAuth() {
         error: {
           message: response.reason || "Sign up not allowed",
         } as AuthError,
-        needsVerification: false,
       };
     }
 
-    return { error: null as AuthError, needsVerification: true };
+    return { error: null as AuthError };
   }, []);
 
   const signOut = useCallback(async () => {

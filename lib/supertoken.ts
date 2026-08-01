@@ -2,7 +2,6 @@
 
 import SuperTokens from "supertokens-auth-react";
 import EmailPassword from "supertokens-auth-react/recipe/emailpassword";
-import EmailVerification from "supertokens-auth-react/recipe/emailverification";
 import Session from "supertokens-auth-react/recipe/session";
 
 export const routerInfo: {
@@ -35,15 +34,6 @@ export function initSuperTokens() {
       websiteBasePath: "/",
     },
     recipeList: [
-      EmailVerification.init({
-        mode: "REQUIRED",
-        getRedirectionURL: async (context) => {
-          if (context.action === "VERIFY_EMAIL") {
-            return "/verify-email";
-          }
-          return undefined;
-        },
-      }),
       Session.init({
         tokenTransferMethod: "header",
       }),

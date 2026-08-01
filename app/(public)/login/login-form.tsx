@@ -49,13 +49,9 @@ export function LoginForm() {
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error: signUpError, needsVerification } = await signUp(email, password);
+        const { error: signUpError } = await signUp(email, password);
         if (signUpError) {
           setError(signUpError.message);
-        } else if (needsVerification) {
-          setSuccess(
-            "Account created! Please check your email to verify your account before signing in."
-          );
         } else {
           router.replace(searchParams.get("redirectTo") || "/home");
         }
