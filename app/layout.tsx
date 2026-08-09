@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SuperTokensProvider } from "@/components/providers/supertokens-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,6 +17,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SelfBrief Aero",
   description: "Aviation Intelligence Platform",
+  icons: {
+    icon: [{ url: "/brand/logo.png", type: "image/png", sizes: "180x180" }],
+    apple: [{ url: "/brand/logo.png", type: "image/png", sizes: "180x180" }],
+  },
 };
 
 export default function RootLayout({
@@ -29,7 +34,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <SuperTokensProvider>{children}</SuperTokensProvider>
+        <SuperTokensProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </SuperTokensProvider>
       </body>
     </html>
   );

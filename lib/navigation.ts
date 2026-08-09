@@ -1,54 +1,71 @@
 import type { AppRole } from "@/lib/roles";
 import { hasAnyRole, hasRole, isAdmin, isSuperAdmin } from "@/lib/roles";
 
-export const ROLE_ROUTES: Record<AppRole, string> = {
-  user: "/user",
-  admin: "/admin",
-  "super-admin": "/super-admin",
+export const ROLE_DEFAULT_ROUTES: Record<AppRole, string> = {
+  user: "/user/jobs",
+  admin: "/user/jobs",
+  "super-admin": "/super-admin/templates",
 };
 
 export type NavItem = {
   label: string;
   href: string;
   roles: AppRole[];
+  icon: string;
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Home", href: "/home", roles: ["user", "admin", "super-admin"] },
-  { label: "User", href: "/user", roles: ["user"] },
-  { label: "Admin", href: "/admin", roles: ["admin"] },
-  { label: "Super Admin", href: "/super-admin", roles: ["super-admin"] },
+  {
+    label: "Create New Job",
+    href: "/user/create-job",
+    roles: ["user", "admin", "super-admin"],
+    icon: "plus-circle",
+  },
+  {
+    label: "View Jobs",
+    href: "/user/jobs",
+    roles: ["user", "admin", "super-admin"],
+    icon: "briefcase",
+  },
+  {
+    label: "Manage Templates",
+    href: "/super-admin/templates",
+    roles: ["super-admin"],
+    icon: "file-text",
+  },
+  {
+    label: "Manage Airports",
+    href: "/super-admin/airports",
+    roles: ["super-admin"],
+    icon: "map-pin",
+  },
+  {
+    label: "Manage Organisations",
+    href: "/super-admin/organisations",
+    roles: ["super-admin"],
+    icon: "building",
+  },
 ];
 
-export function getRouteForRole(role: AppRole) {
-  return ROLE_ROUTES[role];
-}
-
 export function getDefaultRouteForRoles(roles: AppRole[]) {
-  if (isSuperAdmin(roles)) return ROLE_ROUTES["super-admin"];
-  if (isAdmin(roles)) return ROLE_ROUTES.admin;
-  if (hasRole(roles, "user")) return ROLE_ROUTES.user;
-  return "/home";
+  if (isSuperAdmin(roles)) return ROLE_DEFAULT_ROUTES["super-admin"];
+  if (isAdmin(roles)) return ROLE_DEFAULT_ROUTES.admin;
+  if (hasRole(roles, "user")) return ROLE_DEFAULT_ROUTES.user;
+  return "/user/jobs";
 }
 
 export function getNavItemsForRoles(roles: AppRole[]) {
-  return NAV_ITEMS.filter((item) => {
-    if (item.href === "/home") return true;
-    if (item.href === "/admin") return isAdmin(roles);
-    if (item.href === "/super-admin") return isSuperAdmin(roles);
-    return hasAnyRole(roles, item.roles);
-  });
+  return NAV_ITEMS.filter((item) => hasAnyRole(roles, item.roles));
 }
 
 export function canAccessRoute(roles: AppRole[], pathname: string) {
-  if (pathname === "/home" || pathname.startsWith("/home/")) return true;
-  if (pathname === "/user" || pathname.startsWith("/user/")) {
-    return hasRole(roles, "user") || isAdmin(roles);
+  if (pathname.startsWith("/user/")) {
+    return hasRole(roles, "user") || isAdmin(roles) || isSuperAdmin(roles);
   }
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    return isAdmin(roles);
+  if (pathname.startsWith("/admin/")) {
+    return isAdmin(roles) || isSuperAdmin(roles);
   }
-  if (pathname === "/super-admin" || pathname.startsWith("/super-admin/")) {
+  if (pathname.startsWith("/super-admin/")) {
     return isSuperAdmin(roles);
   }
   return true;
