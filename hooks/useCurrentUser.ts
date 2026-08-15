@@ -29,26 +29,28 @@ type State = {
  */
 export function useCurrentUser(): State {
   const session = useSessionContext();
-  const [state, setState] = useState<State>({
-    user: null,
-    loading: true,
-    error: null,
-  });
+  const sessionLoading = session.loading;
+  const doesSessionExist = !session.loading && session.doesSessionExist;
+  const userId =
+    !session.loading && session.doesSessionExist ? session.userId : null;
+
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (session.loading) return;
+    if (!userId) return;
 
-    if (!session.doesSessionExist) {
-      setState({ user: null, loading: false, error: null });
-      return;
-    }
-
-    setState((s) => ({ ...s, loading: true }));
+    let cancelled = false;
 
     api
       .get<CurrentUser>("/api/v1/me")
-      .then((user) => setState({ user, loading: false, error: null }))
+      .then((fetchedUser) => {
+        if (cancelled) return;
+        setUser(fetchedUser);
+        setError(null);
+      })
       .catch(async (err: Error & { status?: number }) => {
+        if (cancelled) return;
         // 403 means is_active=false — sign out and redirect to login with an
         // error message so the user isn't left staring at a blank screen.
         if (err.status === 403) {
@@ -57,9 +59,26 @@ export function useCurrentUser(): State {
           window.location.href = "/login?error=deactivated";
           return;
         }
-        setState({ user: null, loading: false, error: err.message });
+        setUser(null);
+        setError(err.message);
       });
-  }, [session.loading, session.doesSessionExist]);
 
-  return state;
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  if (!doesSessionExist) {
+    return { user: null, loading: sessionLoading, error: null };
+  }
+
+  const userMatchesSession =
+    user !== null && user.supertokens_user_id === userId;
+  const loading = sessionLoading || (!userMatchesSession && error === null);
+
+  return {
+    user: userMatchesSession ? user : null,
+    loading,
+    error,
+  };
 }
