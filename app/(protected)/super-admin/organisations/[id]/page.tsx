@@ -42,7 +42,7 @@ import {
 import { api } from "@/lib/api";
 import type { OrganizationOut, TemplateSummary, UserOut } from "@/lib/api-types";
 
-type OrgRole = "admin" | "user";
+type OrgRole = "super-admin" | "admin" | "user";
 
 export default function OrgDetailPage() {
   const params = useParams();
@@ -378,25 +378,20 @@ function UserRow({
       <TableCell className="font-medium">{user.full_name}</TableCell>
       <TableCell className="text-muted-foreground text-sm">{user.email}</TableCell>
       <TableCell>
-        {user.role === "super-admin" ? (
-          <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">
-            Super Admin
-          </span>
-        ) : (
-          <Select
-            value={user.role}
-            onValueChange={(v) => onRoleChange(user.id, v as OrgRole)}
-            disabled={!user.is_active}
-          >
-            <SelectTrigger className="h-8 w-28 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="user">User</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
+        <Select
+          value={user.role}
+          onValueChange={(v) => onRoleChange(user.id, v as OrgRole)}
+          disabled={!user.is_active}
+        >
+          <SelectTrigger className="h-8 w-36 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="super-admin">Super Admin</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+            <SelectItem value="user">User</SelectItem>
+          </SelectContent>
+        </Select>
       </TableCell>
       <TableCell>{statusBadge}</TableCell>
       <TableCell className="text-right">
@@ -540,8 +535,9 @@ function InviteUserDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="super-admin">Super Admin</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="user">User</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
