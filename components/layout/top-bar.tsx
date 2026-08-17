@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { SettingsIcon, UserIcon, UsersIcon, LogOutIcon } from "lucide-react";
+import { UserIcon, LogOutIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -31,14 +31,6 @@ export function TopBar({ userEmail, userName }: TopBarProps) {
   return (
     <header className="flex h-14 items-center justify-end border-b bg-white px-6">
       <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.push("/settings")}
-          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          aria-label="Settings"
-        >
-          <SettingsIcon className="size-4" />
-        </button>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="rounded-full outline-none ring-ring focus:ring-2">
@@ -62,14 +54,6 @@ export function TopBar({ userEmail, userName }: TopBarProps) {
             <DropdownMenuItem onClick={() => router.push("/profile")}>
               <UserIcon className="mr-2 size-4" />
               Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/settings")}>
-              <SettingsIcon className="mr-2 size-4" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/team")}>
-              <UsersIcon className="mr-2 size-4" />
-              Team Management
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
