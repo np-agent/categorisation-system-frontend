@@ -45,6 +45,12 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["super-admin"],
     icon: "building",
   },
+  {
+    label: "SelfBrief Team",
+    href: "/super-admin/team",
+    roles: ["super-admin"],
+    icon: "shield",
+  },
 ];
 
 export function getDefaultRouteForRoles(roles: AppRole[]) {

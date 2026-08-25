@@ -49,16 +49,10 @@ export function useCurrentUser(): State {
         setUser(fetchedUser);
         setError(null);
       })
-      .catch(async (err: Error & { status?: number }) => {
+      .catch((err: Error & { status?: number }) => {
         if (cancelled) return;
-        // 403 means is_active=false — sign out and redirect to login with an
-        // error message so the user isn't left staring at a blank screen.
-        if (err.status === 403) {
-          const { signOut } = await import("supertokens-auth-react/recipe/session");
-          await signOut();
-          window.location.href = "/login?error=deactivated";
-          return;
-        }
+        // A 403 (deactivated account or organisation) is already handled
+        // centrally in lib/api.ts, which signs out and redirects.
         setUser(null);
         setError(err.message);
       });

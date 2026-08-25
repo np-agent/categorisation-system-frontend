@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BriefcaseIcon, BuildingIcon, FileTextIcon, MapPinIcon, PlusCircleIcon } from "lucide-react";
+import {
+  BriefcaseIcon,
+  BuildingIcon,
+  FileTextIcon,
+  MapPinIcon,
+  PlusCircleIcon,
+  ShieldCheckIcon,
+} from "lucide-react";
 import { BrandLogo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "@/lib/navigation";
@@ -13,6 +20,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   "file-text": FileTextIcon,
   "map-pin": MapPinIcon,
   building: BuildingIcon,
+  shield: ShieldCheckIcon,
 };
 
 type SidebarProps = {

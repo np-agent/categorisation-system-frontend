@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { EyeIcon, PlayIcon, Trash2Icon } from "lucide-react";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  EyeIcon,
+  PlayIcon,
+  Trash2Icon,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -29,6 +35,8 @@ import { JobDetailsDialog } from "@/components/jobs/job-details-dialog";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { api } from "@/lib/api";
 import type { AppRole, JobOut, JobSummary, JobStatus } from "@/lib/api-types";
+
+const PAGE_SIZE = 15;
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "All statuses" },
@@ -66,6 +74,7 @@ export default function ViewJobsPage() {
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<JobOut | null>(null);
+  const [page, setPage] = useState(1);
 
   const fetchJobs = useCallback(async () => {
     if (!user) return;
@@ -98,6 +107,13 @@ export default function ViewJobsPage() {
     if (airportFilter !== "all" && j.airport_icao !== airportFilter) return false;
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filtered.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   async function handleViewJob(jobId: string) {
     try {
@@ -156,7 +172,13 @@ export default function ViewJobsPage() {
           </h2>
           <div className="flex items-center gap-3">
             {airportOptions.length > 1 && (
-              <Select value={airportFilter} onValueChange={setAirportFilter}>
+              <Select
+                value={airportFilter}
+                onValueChange={(v) => {
+                  setAirportFilter(v);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger className="h-8 w-52 text-sm">
                   <SelectValue placeholder="All airports" />
                 </SelectTrigger>
@@ -168,7 +190,13 @@ export default function ViewJobsPage() {
                 </SelectContent>
               </Select>
             )}
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => {
+                setStatusFilter(v);
+                setPage(1);
+              }}
+            >
               <SelectTrigger className="h-8 w-44 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -211,7 +239,7 @@ export default function ViewJobsPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((job) => (
+              pageRows.map((job) => (
                 <TableRow key={job.id} className="group">
                   <TableCell className="pl-6">
                     <span className="font-medium text-foreground">{job.title}</span>
@@ -283,6 +311,41 @@ export default function ViewJobsPage() {
           </TableBody>
         </Table>
       </div>
+
+      {!loading && filtered.length > 0 && (
+        <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Showing {(currentPage - 1) * PAGE_SIZE + 1}&ndash;
+            {Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} job
+            {filtered.length !== 1 ? "s" : ""}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-8"
+                disabled={currentPage === 1}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                <ChevronLeftIcon className="size-4" />
+              </Button>
+              <span className="px-2 font-medium text-foreground">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-8"
+                disabled={currentPage === totalPages}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                <ChevronRightIcon className="size-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <JobDetailsDialog
         job={selectedJob}

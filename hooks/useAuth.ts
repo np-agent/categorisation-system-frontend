@@ -7,6 +7,23 @@ import Session, { useSessionContext } from "supertokens-auth-react/recipe/sessio
 
 type AuthError = { message: string } | null;
 
+/**
+ * SuperTokens throws rather than returns when the backend replies with
+ * `{status: "GENERAL_ERROR"}`, which is how we report a deactivated account or
+ * organisation at sign-in. Matches the library's own STGeneralError.isThisError,
+ * without pulling in supertokens-web-js as a direct dependency.
+ */
+function generalErrorMessage(err: unknown): string | null {
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { isSuperTokensGeneralError?: boolean }).isSuperTokensGeneralError === true
+  ) {
+    return (err as Error).message || "Something went wrong";
+  }
+  return null;
+}
+
 function fieldErrorMessage(
   formFields: { id: string; error: string }[] | undefined,
   fallback: string
@@ -30,12 +47,19 @@ export function useAuth() {
   }, [sessionLoading]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const response = await EmailPassword.signIn({
-      formFields: [
-        { id: "email", value: email },
-        { id: "password", value: password },
-      ],
-    });
+    let response;
+    try {
+      response = await EmailPassword.signIn({
+        formFields: [
+          { id: "email", value: email },
+          { id: "password", value: password },
+        ],
+      });
+    } catch (err) {
+      const message = generalErrorMessage(err);
+      if (message === null) throw err;
+      return { error: { message } as AuthError };
+    }
 
     if (response.status === "FIELD_ERROR") {
       return {
@@ -57,12 +81,19 @@ export function useAuth() {
   }, []);
 
   const signUp = useCallback(async (email: string, password: string) => {
-    const response = await EmailPassword.signUp({
-      formFields: [
-        { id: "email", value: email },
-        { id: "password", value: password },
-      ],
-    });
+    let response;
+    try {
+      response = await EmailPassword.signUp({
+        formFields: [
+          { id: "email", value: email },
+          { id: "password", value: password },
+        ],
+      });
+    } catch (err) {
+      const message = generalErrorMessage(err);
+      if (message === null) throw err;
+      return { error: { message } as AuthError };
+    }
 
     if (response.status === "FIELD_ERROR") {
       return {
@@ -111,9 +142,18 @@ export function useAuth() {
   }, []);
 
   const updatePassword = useCallback(async (password: string) => {
-    const response = await EmailPassword.submitNewPassword({
-      formFields: [{ id: "password", value: password }],
-    });
+    let response;
+    try {
+      response = await EmailPassword.submitNewPassword({
+        formFields: [{ id: "password", value: password }],
+      });
+    } catch (err) {
+      // Raised when the password was saved but the account or organisation is
+      // deactivated, so the new password cannot be used yet.
+      const message = generalErrorMessage(err);
+      if (message === null) throw err;
+      return { error: { message } as AuthError };
+    }
 
     if (response.status === "FIELD_ERROR") {
       return {

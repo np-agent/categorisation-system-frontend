@@ -129,6 +129,8 @@ export type UserOut = {
   organization_id: string;
   role: AppRole;
   is_active: boolean;
+  /** True when the org being deactivated switched this user off. */
+  deactivated_by_org: boolean;
   invite_status: InviteStatus;
   created_at: string;
 };

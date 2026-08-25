@@ -5,15 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
   CheckIcon,
-  CopyIcon,
-  MailIcon,
   PencilIcon,
-  PlusIcon,
-  UserMinusIcon,
-  UserIcon,
-  UserCheckIcon,
+  PowerIcon,
+  PowerOffIcon,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { OrgStatusBadge } from "@/components/organisations/org-status-badge";
+import { ToggleOrgActiveDialog } from "@/components/organisations/toggle-org-active-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,25 +21,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { UserManagement } from "@/components/users/user-management";
 import { api } from "@/lib/api";
-import type { OrganizationOut, TemplateSummary, UserOut } from "@/lib/api-types";
-
-type OrgRole = "super-admin" | "admin" | "user";
+import type { OrganizationOut, TemplateSummary } from "@/lib/api-types";
 
 export default function OrgDetailPage() {
   const params = useParams();
@@ -50,7 +31,6 @@ export default function OrgDetailPage() {
   const orgId = params.id as string;
 
   const [org, setOrg] = useState<OrganizationOut | null>(null);
-  const [users, setUsers] = useState<UserOut[]>([]);
   const [allTemplates, setAllTemplates] = useState<TemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,14 +39,13 @@ export default function OrgDetailPage() {
   const [templatesDirty, setTemplatesDirty] = useState(false);
   const [savingTemplates, setSavingTemplates] = useState(false);
 
-  const [showInvite, setShowInvite] = useState(false);
   const [showEditName, setShowEditName] = useState(false);
+  const [showToggleActive, setShowToggleActive] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [orgData, usersData, templatesData] = await Promise.all([
+      const [orgData, templatesData] = await Promise.all([
         api.get<OrganizationOut>(`/api/v1/organisations/${orgId}`),
-        api.get<UserOut[]>(`/api/v1/organisations/${orgId}/users`),
         api.get<TemplateSummary[]>("/api/v1/templates/summary"),
       ]);
       // Only active templates are assignable; drop any stale inactive IDs from selection
@@ -75,7 +54,6 @@ export default function OrgDetailPage() {
       setOrg(orgData);
       setPendingTemplates(new Set(cleaned));
       setTemplatesDirty(cleaned.length !== orgData.templates.length);
-      setUsers(usersData);
       setAllTemplates(templatesData);
     } catch (e) {
       console.error(e);
@@ -123,30 +101,6 @@ export default function OrgDetailPage() {
     setTemplatesDirty(false);
   }
 
-  async function handleRoleChange(userId: string, role: OrgRole) {
-    try {
-      const updated = await api.patch<UserOut>(
-        `/api/v1/organisations/${orgId}/users/${userId}/role`,
-        { role }
-      );
-      setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  async function handleToggleActive(userId: string, currentlyActive: boolean) {
-    const action = currentlyActive ? "deactivate" : "reactivate";
-    try {
-      const updated = await api.patch<UserOut>(
-        `/api/v1/organisations/${orgId}/users/${userId}/${action}`
-      );
-      setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
   if (loading) {
     return (
       <div className="p-6 space-y-4">
@@ -169,22 +123,62 @@ export default function OrgDetailPage() {
     <div className="p-6 max-w-5xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex items-start gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/super-admin/organisations")} className="mt-0.5 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push("/super-admin/organisations")}
+          className="mt-0.5 shrink-0"
+        >
           <ArrowLeftIcon className="size-4" />
         </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-foreground">{org.name}</h1>
-            <Badge variant={org.is_active ? "default" : "secondary"}>
-              {org.is_active ? "Active" : "Inactive"}
-            </Badge>
-            <Button variant="ghost" size="icon" className="size-7" onClick={() => setShowEditName(true)}>
+            <OrgStatusBadge isActive={org.is_active} />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => setShowEditName(true)}
+            >
               <PencilIcon className="size-3.5" />
             </Button>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground font-mono">{org.slug}</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className={
+            org.is_active
+              ? "shrink-0 gap-1.5 text-destructive hover:text-destructive"
+              : "shrink-0 gap-1.5 text-green-700 hover:text-green-800"
+          }
+          onClick={() => setShowToggleActive(true)}
+        >
+          {org.is_active ? (
+            <>
+              <PowerOffIcon className="size-3.5" />
+              Deactivate
+            </>
+          ) : (
+            <>
+              <PowerIcon className="size-3.5" />
+              Reactivate
+            </>
+          )}
+        </Button>
       </div>
+
+      {!org.is_active && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p className="font-medium">This organisation is deactivated</p>
+          <p className="mt-0.5 text-xs">
+            Nobody in it can sign in or run jobs. Reactivating restores each
+            member&apos;s previous access exactly as it was.
+          </p>
+        </div>
+      )}
 
       {/* Templates Section */}
       <section>
@@ -248,65 +242,11 @@ export default function OrgDetailPage() {
         </p>
       </section>
 
-      {/* Users Section */}
-      <section>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">Users</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Manage who has access to this organisation.
-            </p>
-          </div>
-          <Button onClick={() => setShowInvite(true)}>
-            <PlusIcon className="mr-2 size-4" />
-            Invite User
-          </Button>
-        </div>
-
-        {users.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
-            <UserIcon className="mb-3 size-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">No users yet.</p>
-            <Button className="mt-4" variant="outline" size="sm" onClick={() => setShowInvite(true)}>
-              Invite the first user
-            </Button>
-          </div>
-        ) : (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <UserRow
-                    key={user.id}
-                    user={user}
-                    orgId={orgId}
-                    onRoleChange={handleRoleChange}
-                    onToggleActive={handleToggleActive}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </section>
-
-      <InviteUserDialog
-        open={showInvite}
+      {/* Toggling the org rewrites every member's flag, so remount to refetch. */}
+      <UserManagement
+        key={org.is_active ? "org-active" : "org-inactive"}
         orgId={orgId}
-        onClose={() => setShowInvite(false)}
-        onInvited={(newUser) => {
-          setUsers((prev) => [...prev, newUser]);
-          setShowInvite(false);
-        }}
+        orgActive={org.is_active}
       />
 
       <EditNameDialog
@@ -319,247 +259,18 @@ export default function OrgDetailPage() {
         }}
         orgId={orgId}
       />
+
+      {showToggleActive && (
+        <ToggleOrgActiveDialog
+          org={org}
+          onClose={() => setShowToggleActive(false)}
+          onSaved={(updated) => {
+            setOrg(updated);
+            setShowToggleActive(false);
+          }}
+        />
+      )}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// User row with inline role select + copy invite link
-// ---------------------------------------------------------------------------
-
-function UserRow({
-  user,
-  orgId,
-  onRoleChange,
-  onToggleActive,
-}: {
-  user: UserOut;
-  orgId: string;
-  onRoleChange: (userId: string, role: OrgRole) => void;
-  onToggleActive: (userId: string, currentlyActive: boolean) => void;
-}) {
-  const [copied, setCopied] = useState(false);
-  const [loadingLink, setLoadingLink] = useState(false);
-
-  async function handleCopyLink() {
-    setLoadingLink(true);
-    try {
-      const res = await api.get<{ invite_link: string }>(
-        `/api/v1/organisations/${orgId}/invite/${user.id}/link`
-      );
-      await navigator.clipboard.writeText(res.invite_link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingLink(false);
-    }
-  }
-
-  const statusBadge = !user.is_active ? (
-    <Badge variant="secondary" className="gap-1 text-muted-foreground">
-      Inactive
-    </Badge>
-  ) : user.invite_status === "pending" ? (
-    <Badge variant="secondary" className="gap-1">
-      <MailIcon className="size-3" />
-      Invite Pending
-    </Badge>
-  ) : (
-    <Badge variant="default" className="bg-green-600 gap-1">
-      <CheckIcon className="size-3" />
-      Active
-    </Badge>
-  );
-
-  return (
-    <TableRow className={!user.is_active ? "opacity-60" : undefined}>
-      <TableCell className="font-medium">{user.full_name}</TableCell>
-      <TableCell className="text-muted-foreground text-sm">{user.email}</TableCell>
-      <TableCell>
-        <Select
-          value={user.role}
-          onValueChange={(v) => onRoleChange(user.id, v as OrgRole)}
-          disabled={!user.is_active}
-        >
-          <SelectTrigger className="h-8 w-36 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="super-admin">Super Admin</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="user">User</SelectItem>
-          </SelectContent>
-        </Select>
-      </TableCell>
-      <TableCell>{statusBadge}</TableCell>
-      <TableCell className="text-right">
-        <div className="flex items-center justify-end gap-2">
-          {user.is_active && user.invite_status === "pending" && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              title="Copy invite link"
-              onClick={handleCopyLink}
-              disabled={loadingLink}
-            >
-              {copied ? (
-                <CheckIcon className="size-3.5 text-green-600" />
-              ) : (
-                <CopyIcon className="size-3.5" />
-              )}
-            </Button>
-          )}
-          {user.role !== "super-admin" && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className={[
-                "size-8",
-                user.is_active
-                  ? "text-destructive hover:text-destructive"
-                  : "text-green-600 hover:text-green-700",
-              ].join(" ")}
-              title={user.is_active ? "Deactivate user" : "Reactivate user"}
-              onClick={() => onToggleActive(user.id, user.is_active)}
-            >
-              {user.is_active ? (
-                <UserMinusIcon className="size-3.5" />
-              ) : (
-                <UserCheckIcon className="size-3.5" />
-              )}
-            </Button>
-          )}
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Invite user dialog
-// ---------------------------------------------------------------------------
-
-function InviteUserDialog({
-  open,
-  orgId,
-  onClose,
-  onInvited,
-}: {
-  open: boolean;
-  orgId: string;
-  onClose: () => void;
-  onInvited: (user: UserOut) => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<OrgRole>("user");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-
-  function handleClose() {
-    setEmail("");
-    setFullName("");
-    setRole("user");
-    setError(null);
-    setDone(false);
-    onClose();
-  }
-
-  async function handleInvite() {
-    if (!email.trim()) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const newUser = await api.post<UserOut>(
-        `/api/v1/organisations/${orgId}/invite`,
-        { email, role, full_name: fullName || undefined }
-      );
-      onInvited(newUser);
-      setDone(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to invite user");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Invite User</DialogTitle>
-        </DialogHeader>
-
-        {done ? (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <div className="flex size-12 items-center justify-center rounded-full bg-green-100">
-              <CheckIcon className="size-6 text-green-600" />
-            </div>
-            <p className="font-medium text-foreground">Invite sent</p>
-            <p className="text-sm text-muted-foreground">
-              An email has been sent to <strong>{email}</strong> with a link to set their password and join the organisation.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 py-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="invite-email">
-                Email <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="user@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleInvite(); }}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="invite-name">Full Name (optional)</Label>
-              <Input
-                id="invite-name"
-                placeholder="Jane Smith"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as OrgRole)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="super-admin">Super Admin</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="user">User</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Users can create and view jobs. Admins have the same access and are reserved for billing controls in future.
-              </p>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            {done ? "Close" : "Cancel"}
-          </Button>
-          {!done && (
-            <Button onClick={handleInvite} disabled={!email.trim() || saving}>
-              {saving ? "Sending..." : "Send Invite"}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

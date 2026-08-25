@@ -42,6 +42,8 @@ export function LoginForm() {
     const urlError = searchParams.get("error");
     if (urlError === "deactivated") {
       setError("Your account has been deactivated. Please contact your administrator.");
+    } else if (urlError === "org_deactivated") {
+      setError("Your organisation has been deactivated. Please contact your administrator.");
     }
   }, [searchParams]);
 
@@ -71,7 +73,12 @@ export function LoginForm() {
           if (status === 403) {
             const { signOut } = await import("supertokens-auth-react/recipe/session");
             await signOut();
-            setError("Your account has been deactivated. Please contact your administrator.");
+            const detail = (meErr as { message?: string }).message ?? "";
+            setError(
+              /organisation/i.test(detail)
+                ? "Your organisation has been deactivated. Please contact your administrator."
+                : "Your account has been deactivated. Please contact your administrator."
+            );
           } else {
             router.replace(searchParams.get("redirectTo") || "/home");
           }

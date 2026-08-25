@@ -10,6 +10,26 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+/**
+ * The backend answers 403 for a deactivated account or organisation. Handling
+ * it here means any request from any screen ends the session, instead of each
+ * caller having to notice and the user being left on a half-broken page.
+ */
+async function handleRevokedAccess(detail: string) {
+  if (typeof window === "undefined") return;
+  // Already on the login screen — it shows the message inline instead.
+  if (window.location.pathname === "/login") return;
+
+  const reason = /organisation/i.test(detail) ? "org_deactivated" : "deactivated";
+  try {
+    const { signOut } = await import("supertokens-auth-react/recipe/session");
+    await signOut();
+  } catch {
+    // Session may already be gone; the redirect below still applies.
+  }
+  window.location.href = `/login?error=${reason}`;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -31,6 +51,10 @@ async function request<T>(
     } catch {
       // ignore parse errors
     }
+    if (res.status === 403 && /deactivated/i.test(detail)) {
+      await handleRevokedAccess(detail);
+    }
+
     const err = new Error(detail) as Error & { status: number };
     err.status = res.status;
     throw err;
