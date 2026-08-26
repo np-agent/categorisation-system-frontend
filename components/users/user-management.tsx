@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import {
   Select,
   SelectContent,
@@ -527,14 +528,22 @@ function UserRow({
 
   return (
     <TableRow>
-      <TableCell className="truncate pl-5 align-middle text-sm font-medium">
-        {user.full_name}
-        {isSelf && (
-          <span className="ml-1.5 text-xs font-normal text-muted-foreground">(you)</span>
-        )}
+      <TableCell className="pl-5 align-middle">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <TruncatedText
+            text={user.full_name}
+            className="flex-1 text-sm font-medium"
+          />
+          {isSelf && (
+            <span className="shrink-0 text-xs font-normal text-muted-foreground">(you)</span>
+          )}
+        </div>
       </TableCell>
-      <TableCell className="truncate align-middle text-sm text-muted-foreground">
-        {user.email}
+      <TableCell className="align-middle">
+        <TruncatedText
+          text={user.email}
+          className="text-sm text-muted-foreground"
+        />
       </TableCell>
       <TableCell className="align-middle">
         {roleIsSelectable ? (
@@ -731,8 +740,8 @@ function InviteUserDialog({
               </Select>
               <p className="text-xs text-muted-foreground">
                 {roleOptions.includes("super-admin")
-                  ? "Super admins manage the whole platform. Admins and users are scoped to their own organisation."
-                  : "Users can create and view jobs. Admins see everything in their organisation."}
+                  ? "Super admins manage the whole platform. Admins and users can create jobs and view every job in their organisation."
+                  : "Users and admins can create jobs and view every job in their organisation."}
               </p>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}

@@ -28,8 +28,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { api } from "@/lib/api";
 import type { AirportOut } from "@/lib/api-types";
+import { formatDateTime } from "@/lib/format";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 const PAGE_SIZE = 25;
@@ -173,13 +175,17 @@ export default function ManageAirportsPage() {
                   <TableCell className="pl-5 align-middle font-mono text-sm font-semibold">
                     {airport.icao_code}
                   </TableCell>
-                  <TableCell className="align-middle whitespace-normal">
+                  <TableCell className="align-middle">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium leading-5">{airport.name}</p>
+                      <TruncatedText
+                        text={airport.name}
+                        className="text-sm font-medium leading-5"
+                      />
                       {airport.city ? (
-                        <p className="truncate text-xs leading-4 text-muted-foreground">
-                          {airport.city}
-                        </p>
+                        <TruncatedText
+                          text={airport.city}
+                          className="text-xs leading-4 text-muted-foreground"
+                        />
                       ) : null}
                     </div>
                   </TableCell>
@@ -202,13 +208,9 @@ export default function ManageAirportsPage() {
                   <TableCell className="align-middle text-sm tabular-nums text-muted-foreground">
                     {airport.page_count != null ? airport.page_count : "—"}
                   </TableCell>
-                  <TableCell className="align-middle text-sm whitespace-nowrap text-muted-foreground">
+                  <TableCell className="align-middle text-sm text-muted-foreground">
                     {airport.last_updated
-                      ? new Date(airport.last_updated).toLocaleDateString("en-GB", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })
+                      ? formatDateTime(airport.last_updated)
                       : "—"}
                   </TableCell>
                   <TableCell className="pr-5 align-middle">
@@ -478,11 +480,7 @@ function UploadDialog({
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">
                       {airport.last_updated
-                        ? new Date(airport.last_updated).toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })
+                        ? formatDateTime(airport.last_updated)
                         : "—"}
                     </td>
                     <td className="px-3 py-2">
@@ -502,11 +500,7 @@ function UploadDialog({
                       {v.page_count ?? "—"}
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">
-                      {new Date(v.uploaded_at).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {formatDateTime(v.uploaded_at)}
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">archived</td>
                   </tr>

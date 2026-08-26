@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { UserManagement } from "@/components/users/user-management";
 import { api } from "@/lib/api";
 import type { OrganizationOut, TemplateSummary } from "@/lib/api-types";
@@ -222,14 +223,16 @@ export default function OrgDetailPage() {
                       <CheckIcon className="size-2.5" />
                     </span>
                   )}
-                  <span className="pr-6 font-medium text-sm text-foreground">{t.name}</span>
-                  {t.category && (
-                    <span className="w-fit rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
-                      {t.category}
-                    </span>
-                  )}
+                  <TruncatedText
+                    text={t.name}
+                    className="pr-6 font-medium text-sm text-foreground"
+                  />
                   {t.description && (
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>
+                    <TruncatedText
+                      text={t.description}
+                      clamp={2}
+                      className="text-xs text-muted-foreground mt-1"
+                    />
                   )}
                 </button>
               );

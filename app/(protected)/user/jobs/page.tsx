@@ -30,43 +30,36 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { JobStatusBadge } from "@/components/jobs/job-status-badge";
+import { JobStatusBadge, JOB_STATUS_LABEL } from "@/components/jobs/job-status-badge";
 import { JobDetailsDialog } from "@/components/jobs/job-details-dialog";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { api } from "@/lib/api";
 import type { AppRole, JobOut, JobSummary, JobStatus } from "@/lib/api-types";
+import { formatDateTime } from "@/lib/format";
 
 const PAGE_SIZE = 15;
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "All statuses" },
-  { value: "pending", label: "Pending" },
-  { value: "running", label: "Running" },
-  { value: "ended", label: "Ended" },
-  { value: "failed", label: "Failed" },
-  { value: "awaiting_aip", label: "Awaiting AIP" },
+  { value: "pending", label: JOB_STATUS_LABEL.pending },
+  { value: "running", label: JOB_STATUS_LABEL.running },
+  { value: "ended", label: JOB_STATUS_LABEL.ended },
+  { value: "failed", label: JOB_STATUS_LABEL.failed },
+  { value: "awaiting_aip", label: JOB_STATUS_LABEL.awaiting_aip },
 ];
-
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (days === 0) return "Today";
-  if (days === 1) return "1 day ago";
-  return `${days} days ago`;
-}
 
 // Number of columns varies by role — keep colSpan in sync
 function colCount(role: AppRole) {
   if (role === "super-admin") return 8;
-  if (role === "admin") return 7;
-  return 6;
+  return 7;
 }
 
 export default function ViewJobsPage() {
   const { user } = useCurrentUser();
   const role: AppRole = user?.role ?? "user";
 
-  const showCreatedBy = role === "super-admin" || role === "admin";
+  const showCreatedBy = true;
   const showOrg = role === "super-admin";
 
   const [statusFilter, setStatusFilter] = useState("all");
@@ -159,9 +152,7 @@ export default function ViewJobsPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           {role === "super-admin"
             ? "All analysis jobs across every organisation"
-            : role === "admin"
-            ? "All analysis jobs in your organisation"
-            : "Your analysis jobs"}
+            : "All analysis jobs in your organisation"}
         </p>
       </div>
 
@@ -212,16 +203,16 @@ export default function ViewJobsPage() {
           </div>
         </div>
 
-        <Table>
+        <Table className="table-fixed [&_th]:h-12 [&_th]:px-3 [&_td]:px-3 [&_td]:py-3">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[28%] pl-6">Job Title</TableHead>
+              <TableHead className="w-[22%] pl-6">Job Title</TableHead>
               <TableHead className="w-[14%]">Airport</TableHead>
-              <TableHead className="w-[16%]">Template</TableHead>
-              {showOrg && <TableHead className="w-[14%]">Organisation</TableHead>}
-              {showCreatedBy && <TableHead className="w-[16%]">Created by</TableHead>}
+              <TableHead className="w-[14%]">Template</TableHead>
+              {showOrg && <TableHead className="w-[12%]">Organisation</TableHead>}
+              {showCreatedBy && <TableHead className="w-[14%]">Created by</TableHead>}
               <TableHead className="w-[10%]">Status</TableHead>
-              <TableHead className="w-[10%]">Created</TableHead>
+              <TableHead className="w-[14%]">Created</TableHead>
               <TableHead className="w-12 pr-6" />
             </TableRow>
           </TableHeader>
@@ -241,37 +232,53 @@ export default function ViewJobsPage() {
             ) : (
               pageRows.map((job) => (
                 <TableRow key={job.id} className="group">
-                  <TableCell className="pl-6">
-                    <span className="font-medium text-foreground">{job.title}</span>
+                  <TableCell className="pl-6 align-middle">
+                    <TruncatedText
+                      text={job.title}
+                      className="font-medium text-foreground"
+                    />
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-0.5">
+                  <TableCell className="align-middle">
+                    <div className="min-w-0">
                       <span className="text-sm font-medium">{job.airport_icao}</span>
                       {job.airport_name && (
-                        <span className="text-xs text-muted-foreground truncate max-w-[120px]">
-                          {job.airport_name}
-                        </span>
+                        <TruncatedText
+                          text={job.airport_name}
+                          className="text-xs text-muted-foreground"
+                        />
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {job.template_name ?? "—"}
+                  <TableCell className="align-middle">
+                    <TruncatedText
+                      text={job.template_name}
+                      className="text-sm text-muted-foreground"
+                    />
                   </TableCell>
                   {showOrg && (
-                    <TableCell className="text-sm text-muted-foreground">
-                      {job.organization_name ?? "—"}
+                    <TableCell className="align-middle">
+                      <TruncatedText
+                        text={job.organization_name}
+                        className="text-sm text-muted-foreground"
+                      />
                     </TableCell>
                   )}
                   {showCreatedBy && (
-                    <TableCell className="text-sm text-muted-foreground truncate max-w-[160px]">
-                      {job.created_by_email ?? "—"}
+                    <TableCell className="align-middle">
+                      <TruncatedText
+                        text={job.created_by_email}
+                        className="text-sm text-muted-foreground"
+                      />
                     </TableCell>
                   )}
-                  <TableCell>
+                  <TableCell className="align-middle">
                     <JobStatusBadge status={job.status as JobStatus} />
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                    {timeAgo(job.created_at)}
+                  <TableCell className="align-middle">
+                    <TruncatedText
+                      text={formatDateTime(job.created_at)}
+                      className="text-sm text-muted-foreground"
+                    />
                   </TableCell>
                   <TableCell className="pr-6 text-right">
                     <DropdownMenu>

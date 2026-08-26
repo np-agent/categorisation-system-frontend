@@ -6,6 +6,7 @@ import { CheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { cn } from "@/lib/utils";
 import { AirportSearch } from "@/components/jobs/airport-search";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -268,9 +269,6 @@ function Step1({
             onChange={onAirportChange}
           />
         )}
-        <p className="text-xs text-muted-foreground">
-          Select an airport to fetch its AIP document from our library.
-        </p>
       </div>
     </div>
   );
@@ -337,16 +335,17 @@ function TemplateCard({
           : "border-border hover:border-primary/50 hover:bg-muted/40"
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-semibold text-foreground">{template.name}</span>
-        {template.category && (
-          <span className="shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
-            {template.category}
-          </span>
-        )}
-      </div>
+      <TruncatedText
+        text={template.name}
+        clamp={2}
+        className="font-semibold text-foreground"
+      />
       {template.description && (
-        <p className="text-xs text-muted-foreground">{template.description}</p>
+        <TruncatedText
+          text={template.description}
+          clamp={2}
+          className="text-xs text-muted-foreground"
+        />
       )}
       {selected && (
         <p className="flex items-center gap-1 text-xs font-medium text-green-600">
@@ -379,7 +378,9 @@ function Step3({
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
           <div>
             <dt className="text-muted-foreground">Job Title</dt>
-            <dd className="mt-0.5 font-medium">{state.title || "—"}</dd>
+            <dd className="mt-0.5 font-medium">
+              <TruncatedText text={state.title || "—"} fallback="—" />
+            </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">ICAO Code</dt>
@@ -388,13 +389,18 @@ function Step3({
           {state.airport && (
             <div className="col-span-2">
               <dt className="text-muted-foreground">Airport</dt>
-              <dd className="mt-0.5 font-medium">{state.airport.name}</dd>
+              <dd className="mt-0.5 font-medium">
+                <TruncatedText text={state.airport.name} />
+              </dd>
             </div>
           )}
           <div className="col-span-2">
             <dt className="text-muted-foreground">Analysis Template</dt>
             <dd className="mt-0.5 font-medium">
-              {selectedTemplate ? selectedTemplate.name : "None selected"}
+              <TruncatedText
+                text={selectedTemplate ? selectedTemplate.name : "None selected"}
+                fallback="None selected"
+              />
             </dd>
           </div>
         </dl>

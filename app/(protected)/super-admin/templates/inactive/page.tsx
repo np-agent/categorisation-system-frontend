@@ -2,6 +2,6 @@
 
 import { TemplateManager } from "@/components/templates/template-manager";
 
-export default function ManageTemplatesPage() {
-  return <TemplateManager mode="active" />;
+export default function InactiveTemplatesPage() {
+  return <TemplateManager mode="inactive" />;
 }

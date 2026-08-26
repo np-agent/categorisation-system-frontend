@@ -64,7 +64,7 @@ export default function SelfBriefTeamPage() {
         allowSuperAdmin
         orgActive={org.is_active}
         title="Team Members"
-        description="Super admins manage the whole platform. Admins and users are scoped to SelfBrief's own jobs."
+        description="Super admins manage the whole platform. Admins and users share SelfBrief's jobs and templates."
       />
     </div>
   );

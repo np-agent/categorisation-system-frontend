@@ -17,6 +17,7 @@ import { ToggleOrgActiveDialog } from "@/components/organisations/toggle-org-act
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import {
   Dialog,
   DialogContent,
@@ -195,11 +196,17 @@ export default function OrganisationsPage() {
                       className="group cursor-pointer"
                       onClick={() => router.push(`/super-admin/organisations/${org.id}`)}
                     >
-                      <TableCell className="truncate pl-5 align-middle text-sm font-medium">
-                        {org.name}
+                      <TableCell className="pl-5 align-middle">
+                        <TruncatedText
+                          text={org.name}
+                          className="text-sm font-medium"
+                        />
                       </TableCell>
-                      <TableCell className="truncate align-middle font-mono text-xs text-muted-foreground">
-                        {org.slug}
+                      <TableCell className="align-middle">
+                        <TruncatedText
+                          text={org.slug}
+                          className="font-mono text-xs text-muted-foreground"
+                        />
                       </TableCell>
                       <TableCell className="align-middle text-sm text-muted-foreground">
                         {org.templates.length} template{org.templates.length !== 1 ? "s" : ""}

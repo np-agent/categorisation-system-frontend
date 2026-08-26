@@ -12,22 +12,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import type { JobOut } from "@/lib/api-types";
+import { formatDateTime } from "@/lib/format";
 
 type JobDetailsDialogProps = {
   job: JobOut | null;
   open: boolean;
   onClose: () => void;
 };
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function JobDetailsDialog({ job, open, onClose }: JobDetailsDialogProps) {
   if (!job) return null;
@@ -159,22 +150,22 @@ export function JobDetailsDialog({ job, open, onClose }: JobDetailsDialogProps) 
               <div className="grid grid-cols-2 gap-6 text-sm">
                 <div>
                   <p className="text-muted-foreground">Created At</p>
-                  <p className="mt-0.5 font-medium">{formatDate(job.created_at)}</p>
+                  <p className="mt-0.5 font-medium">{formatDateTime(job.created_at)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Last Updated</p>
-                  <p className="mt-0.5 font-medium">{formatDate(job.updated_at)}</p>
+                  <p className="mt-0.5 font-medium">{formatDateTime(job.updated_at)}</p>
                 </div>
                 {job.submitted_at && (
                   <div>
                     <p className="text-muted-foreground">Submitted At</p>
-                    <p className="mt-0.5 font-medium">{formatDate(job.submitted_at)}</p>
+                    <p className="mt-0.5 font-medium">{formatDateTime(job.submitted_at)}</p>
                   </div>
                 )}
                 {job.completed_at && (
                   <div>
                     <p className="text-muted-foreground">Completed At</p>
-                    <p className="mt-0.5 font-medium">{formatDate(job.completed_at)}</p>
+                    <p className="mt-0.5 font-medium">{formatDateTime(job.completed_at)}</p>
                   </div>
                 )}
               </div>
