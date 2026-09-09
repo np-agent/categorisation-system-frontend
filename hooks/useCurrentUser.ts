@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSessionContext } from "supertokens-auth-react/recipe/session";
 import { api } from "@/lib/api";
 import type { AppRole } from "@/lib/roles";
@@ -14,12 +14,15 @@ export type CurrentUser = {
   organization_id: string;
   is_active: boolean;
   created_at: string;
+  eula_accepted: boolean;
+  eula_accepted_at: string | null;
 };
 
 type State = {
   user: CurrentUser | null;
   loading: boolean;
   error: string | null;
+  refresh: () => Promise<void>;
 };
 
 /**
@@ -36,6 +39,13 @@ export function useCurrentUser(): State {
 
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!userId) return;
+    const fetchedUser = await api.get<CurrentUser>("/api/v1/me");
+    setUser(fetchedUser);
+    setError(null);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -63,7 +73,7 @@ export function useCurrentUser(): State {
   }, [userId]);
 
   if (!doesSessionExist) {
-    return { user: null, loading: sessionLoading, error: null };
+    return { user: null, loading: sessionLoading, error: null, refresh };
   }
 
   const userMatchesSession =
@@ -74,5 +84,6 @@ export function useCurrentUser(): State {
     user: userMatchesSession ? user : null,
     loading,
     error,
+    refresh,
   };
 }

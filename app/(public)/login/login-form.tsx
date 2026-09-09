@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
+import type { EulaOut } from "@/lib/api-types";
+import { EulaViewDialog } from "@/components/legal/eula-view-dialog";
 
 export function LoginForm() {
   const { signIn, signUp, doesSessionExist, loading: authLoading } = useAuth();
@@ -22,6 +24,10 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [eulaAccepted, setEulaAccepted] = useState(false);
+  const [eula, setEula] = useState<EulaOut | null>(null);
+  const [eulaLoadError, setEulaLoadError] = useState<string | null>(null);
+  const [eulaViewOpen, setEulaViewOpen] = useState(false);
 
   useEffect(() => {
     const mode = searchParams.get("mode");
@@ -47,19 +53,50 @@ export function LoginForm() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (!isSignUp) return;
+    let cancelled = false;
+    api
+      .get<EulaOut>("/api/v1/legal/eula")
+      .then((data) => {
+        if (cancelled) return;
+        setEula(data);
+        setEulaLoadError(null);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setEulaLoadError(err.message || "Unable to load the End User Licence Agreement.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignUp]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
 
     if (!email.trim()) { setError("Email is required"); return; }
     if (!password.trim()) { setError("Password is required"); return; }
+    if (isSignUp && !eulaAccepted) {
+      setError("You must accept the End User Licence Agreement to create an account.");
+      return;
+    }
 
     setLoading(true);
     try {
       if (isSignUp) {
         const { error: err } = await signUp(email, password);
         if (err) { setError(err.message); }
-        else { router.replace(searchParams.get("redirectTo") || "/home"); }
+        else {
+          try {
+            await api.get("/api/v1/me");
+            await api.post("/api/v1/me/eula");
+          } catch {
+            // Profile creation or EULA recording can complete on the next screen.
+          }
+          router.replace(searchParams.get("redirectTo") || "/home");
+        }
       } else {
         const { error: err } = await signIn(email, password);
         if (err) { setError(err.message); return; }
@@ -183,7 +220,33 @@ export function LoginForm() {
               </div>
             )}
 
-            <Button type="submit" className="mt-1 w-full" disabled={loading}>
+            {isSignUp && (
+              <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-foreground">
+                <input
+                  type="checkbox"
+                  checked={eulaAccepted}
+                  onChange={(e) => setEulaAccepted(e.target.checked)}
+                  className="mt-0.5 size-4 shrink-0 accent-primary"
+                />
+                <span>
+                  I have read and agree to the{" "}
+                  <button
+                    type="button"
+                    className="font-medium text-primary hover:underline"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setEulaViewOpen(true);
+                    }}
+                  >
+                    End User Licence Agreement
+                  </button>
+                  .
+                </span>
+              </label>
+            )}
+
+            <Button type="submit" className="mt-1 w-full" disabled={loading || (isSignUp && !eula)}>
               {loading
                 ? "Please wait..."
                 : isSignUp
@@ -196,7 +259,7 @@ export function LoginForm() {
             {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
             <button
               type="button"
-              onClick={() => { setIsSignUp((v) => !v); setError(""); }}
+              onClick={() => { setIsSignUp((v) => !v); setError(""); setEulaAccepted(false); }}
               className="font-medium text-primary hover:underline"
             >
               {isSignUp ? "Sign in" : "Sign up"}
@@ -204,6 +267,14 @@ export function LoginForm() {
           </p>
         </div>
       </div>
+
+      <EulaViewDialog
+        open={eulaViewOpen}
+        text={eula?.text ?? ""}
+        loading={isSignUp && !eula && !eulaLoadError}
+        error={eulaLoadError}
+        onClose={() => setEulaViewOpen(false)}
+      />
     </div>
   );
 }

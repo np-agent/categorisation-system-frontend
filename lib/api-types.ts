@@ -98,6 +98,7 @@ export type JobOut = {
   chunks: JobChunk[];
   synthesis: JobSynthesis | null;
   final_result: JobFinalResult | null;
+  advisory_acknowledged: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -133,6 +134,13 @@ export type UserOut = {
   deactivated_by_org: boolean;
   invite_status: InviteStatus;
   created_at: string;
+  eula_accepted: boolean;
+  eula_accepted_at: string | null;
+};
+
+export type EulaOut = {
+  version: string;
+  text: string;
 };
 
 export type OrganizationOut = {

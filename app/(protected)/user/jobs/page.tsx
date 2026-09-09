@@ -358,6 +358,7 @@ export default function ViewJobsPage() {
         job={selectedJob}
         open={!!selectedJob}
         onClose={() => setSelectedJob(null)}
+        onAcknowledged={(job) => setSelectedJob(job)}
       />
     </div>
   );
