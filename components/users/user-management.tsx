@@ -120,6 +120,8 @@ type UserManagementProps = {
   orgId: string;
   /** Super-admin may only be granted inside the internal SelfBrief org. */
   allowSuperAdmin?: boolean;
+  /** When set, replaces the default role list for this page. */
+  allowedRoles?: AppRole[];
   /** Inviting into a deactivated org is blocked by the API too. */
   orgActive?: boolean;
   title?: string;
@@ -129,6 +131,7 @@ type UserManagementProps = {
 export function UserManagement({
   orgId,
   allowSuperAdmin = false,
+  allowedRoles,
   orgActive = true,
   title = "Users",
   description = "Manage who has access to this organisation.",
@@ -161,9 +164,11 @@ export function UserManagement({
 
   useEffect(() => { load(); }, [load]);
 
-  const roleOptions: AppRole[] = allowSuperAdmin
-    ? ["super-admin", "admin", "user"]
-    : ["admin", "user"];
+  const roleOptions: AppRole[] = useMemo(
+    () =>
+      allowedRoles ?? (allowSuperAdmin ? ["super-admin", "admin", "user"] : ["admin", "user"]),
+    [allowedRoles, allowSuperAdmin]
+  );
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -650,15 +655,20 @@ function InviteUserDialog({
 }) {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<AppRole>("user");
+  const defaultRole = roleOptions[0] ?? "user";
+  const [role, setRole] = useState<AppRole>(defaultRole);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  useEffect(() => {
+    if (open) setRole(roleOptions[0] ?? "user");
+  }, [open, roleOptions]);
+
   function handleClose() {
     setEmail("");
     setFullName("");
-    setRole("user");
+    setRole(roleOptions[0] ?? "user");
     setError(null);
     setDone(false);
     onClose();
@@ -739,9 +749,11 @@ function InviteUserDialog({
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {roleOptions.includes("super-admin")
-                  ? "Super admins manage the whole platform. Admins and users can create jobs and view every job in their organisation."
-                  : "Users and admins can create jobs and view every job in their organisation."}
+                {roleOptions.length === 1 && roleOptions[0] === "super-admin"
+                  ? "Super admins manage the whole platform."
+                  : roleOptions.includes("super-admin")
+                    ? "Super admins manage the whole platform. Admins and users can create jobs and view every job in their organisation."
+                    : "Users and admins can create jobs and view every job in their organisation."}
               </p>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}

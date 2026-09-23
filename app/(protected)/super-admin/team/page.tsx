@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { ShieldCheckIcon } from "lucide-react";
 import { UserManagement } from "@/components/users/user-management";
 import { api } from "@/lib/api";
-import type { OrganizationOut } from "@/lib/api-types";
+import type { AppRole, OrganizationOut } from "@/lib/api-types";
+
+const TEAM_ROLES: AppRole[] = ["super-admin"];
 
 /**
  * The internal SelfBrief team. Kept separate from Manage Organisations so
@@ -62,9 +64,10 @@ export default function SelfBriefTeamPage() {
       <UserManagement
         orgId={org.id}
         allowSuperAdmin
+        allowedRoles={TEAM_ROLES}
         orgActive={org.is_active}
         title="Team Members"
-        description="Super admins manage the whole platform. Admins and users share SelfBrief's jobs and templates."
+        description="Invite Super Admins to manage the whole platform."
       />
     </div>
   );

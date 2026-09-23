@@ -30,12 +30,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { OrganisationSearch } from "@/components/filters/organisation-search";
 import { JobStatusBadge, JOB_STATUS_LABEL } from "@/components/jobs/job-status-badge";
 import { JobDetailsDialog } from "@/components/jobs/job-details-dialog";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { api } from "@/lib/api";
-import type { AppRole, JobOut, JobSummary, JobStatus } from "@/lib/api-types";
+import type { AppRole, JobOut, JobSummary, JobStatus, OrganizationOut } from "@/lib/api-types";
 import { formatDateTime } from "@/lib/format";
 
 const PAGE_SIZE = 15;
@@ -64,6 +65,8 @@ export default function ViewJobsPage() {
 
   const [statusFilter, setStatusFilter] = useState("all");
   const [airportFilter, setAirportFilter] = useState("all");
+  const [orgFilter, setOrgFilter] = useState<string | null>(null);
+  const [organisations, setOrganisations] = useState<OrganizationOut[]>([]);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<JobOut | null>(null);
@@ -84,6 +87,28 @@ export default function ViewJobsPage() {
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
+  useEffect(() => {
+    if (role !== "super-admin") return;
+    let cancelled = false;
+    Promise.all([
+      api.get<OrganizationOut[]>("/api/v1/organisations"),
+      api.get<OrganizationOut>("/api/v1/organisations/internal").catch(() => null),
+    ])
+      .then(([customerOrgs, internal]) => {
+        if (cancelled) return;
+        const active = customerOrgs.filter((org) => org.is_active);
+        if (internal?.is_active) active.unshift(internal);
+        active.sort((a, b) => a.name.localeCompare(b.name));
+        setOrganisations(active);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch organisations:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
+
   // Unique airport options derived from the loaded jobs
   const airportOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -98,6 +123,7 @@ export default function ViewJobsPage() {
   const filtered = jobs.filter((j) => {
     if (statusFilter !== "all" && j.status !== statusFilter) return false;
     if (airportFilter !== "all" && j.airport_icao !== airportFilter) return false;
+    if (orgFilter && j.organization_id !== orgFilter) return false;
     return true;
   });
 
@@ -148,7 +174,7 @@ export default function ViewJobsPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">View Jobs</h1>
+        <h1 className="text-2xl font-bold text-foreground">All Jobs</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {role === "super-admin"
             ? "All analysis jobs across every organisation"
@@ -157,11 +183,22 @@ export default function ViewJobsPage() {
       </div>
 
       <div className="rounded-lg border bg-card">
-        <div className="flex items-center justify-between border-b px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
           <h2 className="font-semibold text-foreground">
             Analysis Jobs ({filtered.length})
           </h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {showOrg && (
+              <OrganisationSearch
+                organisations={organisations}
+                value={orgFilter}
+                onChange={(orgId) => {
+                  setOrgFilter(orgId);
+                  setPage(1);
+                }}
+                className="w-56"
+              />
+            )}
             {airportOptions.length > 1 && (
               <Select
                 value={airportFilter}

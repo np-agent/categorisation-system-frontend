@@ -7,12 +7,25 @@ export const ROLE_DEFAULT_ROUTES: Record<AppRole, string> = {
   "super-admin": "/super-admin/templates",
 };
 
-export type NavItem = {
+export type NavLink = {
   label: string;
   href: string;
   roles: AppRole[];
   icon: string;
 };
+
+export type NavGroup = {
+  label: string;
+  icon: string;
+  roles: AppRole[];
+  children: NavLink[];
+};
+
+export type NavItem = NavLink | NavGroup;
+
+export function isNavGroup(item: NavItem): item is NavGroup {
+  return "children" in item;
+}
 
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -22,7 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "plus-circle",
   },
   {
-    label: "View Jobs",
+    label: "All Jobs",
     href: "/user/jobs",
     roles: ["user", "admin", "super-admin"],
     icon: "briefcase",
@@ -46,10 +59,17 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "building",
   },
   {
-    label: "SelfBrief Team",
-    href: "/super-admin/team",
+    label: "Administration",
+    icon: "wrench",
     roles: ["super-admin"],
-    icon: "shield",
+    children: [
+      {
+        label: "SelfBrief Team",
+        href: "/super-admin/team",
+        roles: ["super-admin"],
+        icon: "shield",
+      },
+    ],
   },
 ];
 
@@ -60,8 +80,21 @@ export function getDefaultRouteForRoles(roles: AppRole[]) {
   return "/user/jobs";
 }
 
-export function getNavItemsForRoles(roles: AppRole[]) {
-  return NAV_ITEMS.filter((item) => hasAnyRole(roles, item.roles));
+export function getNavItemsForRoles(roles: AppRole[]): NavItem[] {
+  const items: NavItem[] = [];
+  for (const item of NAV_ITEMS) {
+    if (!hasAnyRole(roles, item.roles)) continue;
+    if (isNavGroup(item)) {
+      const children = item.children.filter((child) =>
+        hasAnyRole(roles, child.roles)
+      );
+      if (children.length === 0) continue;
+      items.push({ ...item, children });
+    } else {
+      items.push(item);
+    }
+  }
+  return items;
 }
 
 export function canAccessRoute(roles: AppRole[], pathname: string) {
