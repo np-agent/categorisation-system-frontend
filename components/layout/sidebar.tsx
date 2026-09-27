@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -12,9 +12,8 @@ import {
   PlusCircleIcon,
   ShieldCheckIcon,
   WrenchIcon,
+  XIcon,
 } from "lucide-react";
-import { BrandLogo } from "@/components/brand/logo";
-import { cn } from "@/lib/utils";
 import { isNavGroup, type NavGroup, type NavItem, type NavLink } from "@/lib/navigation";
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -29,110 +28,273 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 
 type SidebarProps = {
   navItems: NavItem[];
+  contracted: boolean;
+  mobileOpen: boolean;
+  animate: boolean;
+  onCloseMobile: () => void;
 };
 
 function isActivePath(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(href + "/");
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function linkClassName(active: boolean, extra?: string) {
-  return cn(
-    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
-    active
-      ? "bg-primary text-white"
-      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-white",
-    extra
-  );
+function groupPanelId(label: string) {
+  return `sb-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
 
-function NavLinkItem({ item, pathname }: { item: NavLink; pathname: string }) {
-  const Icon = ICON_MAP[item.icon];
+function NavIcon({ name }: { name: string }) {
+  const Icon = ICON_MAP[name];
+  if (!Icon) return null;
   return (
-    <Link href={item.href} className={linkClassName(isActivePath(pathname, item.href))}>
-      {Icon && <Icon className="size-4 shrink-0" />}
-      {item.label}
-    </Link>
+    <span className="sb-icon">
+      <Icon className="sb-icon-svg" />
+    </span>
   );
 }
 
-function NavGroupItem({ item, pathname }: { item: NavGroup; pathname: string }) {
-  const Icon = ICON_MAP[item.icon];
+function NavLinkItem({
+  item,
+  pathname,
+  onNavigate,
+}: {
+  item: NavLink;
+  pathname: string;
+  onNavigate: () => void;
+}) {
+  const active = isActivePath(pathname, item.href);
+  return (
+    <li className={`sb-item sb-level-1${active ? " is-active" : ""}`}>
+      <Link
+        href={item.href}
+        className="sb-link"
+        aria-label={item.label}
+        onClick={onNavigate}
+      >
+        <NavIcon name={item.icon} />
+        <span className="sb-label">{item.label}</span>
+      </Link>
+    </li>
+  );
+}
+
+function NavGroupItem({
+  item,
+  pathname,
+  contracted,
+  open,
+  flyout,
+  onToggle,
+  onFlyoutChange,
+  onNavigate,
+}: {
+  item: NavGroup;
+  pathname: string;
+  contracted: boolean;
+  open: boolean;
+  flyout: boolean;
+  onToggle: () => void;
+  onFlyoutChange: (open: boolean) => void;
+  onNavigate: () => void;
+}) {
+  const itemRef = useRef<HTMLLIElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
+  const panelId = groupPanelId(item.label);
   const childActive = item.children.some((child) =>
     isActivePath(pathname, child.href)
   );
-  const [open, setOpen] = useState(childActive);
+
+  function clearCloseTimer() {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }
+
+  function openFlyout() {
+    if (!contracted) return;
+    clearCloseTimer();
+    onFlyoutChange(true);
+  }
+
+  function scheduleClose() {
+    if (!contracted) return;
+    clearCloseTimer();
+    closeTimer.current = window.setTimeout(() => {
+      if (panelRef.current) panelRef.current.style.top = "";
+      onFlyoutChange(false);
+    }, 160);
+  }
 
   useEffect(() => {
-    if (childActive) setOpen(true);
-  }, [childActive]);
+    return () => clearCloseTimer();
+  }, []);
+
+  useEffect(() => {
+    if (!flyout || !panelRef.current || !itemRef.current) return;
+    const panel = panelRef.current;
+    const itemTop = itemRef.current.getBoundingClientRect().top;
+    const maxHeight = window.innerHeight - 16;
+    // Keep the panel attached to the icon so the pointer can reach the links.
+    // Tall menus scroll inside rather than jumping up and leaving a gap.
+    panel.style.top = `${Math.max(8, itemTop)}px`;
+    const inner = panel.querySelector(".sb-sub-inner") as HTMLElement | null;
+    if (inner) {
+      inner.style.maxHeight = `${Math.max(80, maxHeight - Math.max(8, itemTop) + 8)}px`;
+    }
+  }, [flyout]);
 
   return (
-    <div>
+    <li
+      ref={itemRef}
+      className={`sb-item sb-level-1 has-sub${childActive ? " is-open-path" : ""}${flyout ? " is-flyout" : ""}`}
+      onMouseEnter={openFlyout}
+      onMouseLeave={scheduleClose}
+      onFocusCapture={openFlyout}
+      onBlurCapture={(event) => {
+        if (!itemRef.current?.contains(event.relatedTarget as Node | null)) {
+          scheduleClose();
+        }
+      }}
+    >
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className={cn(
-          "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
-          childActive
-            ? "text-sidebar-foreground"
-            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
-        )}
+        className="sb-link sb-toggle"
+        aria-controls={panelId}
         aria-expanded={open}
+        aria-label={item.label}
+        onClick={() => {
+          if (contracted) return;
+          onToggle();
+        }}
       >
-        {Icon && <Icon className="size-4 shrink-0" />}
-        <span className="flex-1 text-left">{item.label}</span>
-        <ChevronRightIcon
-          className={cn(
-            "size-4 shrink-0 transition-transform",
-            open && "rotate-90"
-          )}
-        />
+        <NavIcon name={item.icon} />
+        <span className="sb-label">{item.label}</span>
+        <ChevronRightIcon className="sb-chevron" />
       </button>
-      {open && (
-        <div className="mt-0.5 flex flex-col gap-0.5">
-          {item.children.map((child) => {
-            const ChildIcon = ICON_MAP[child.icon];
-            return (
-              <Link
-                key={child.href}
-                href={child.href}
-                className={linkClassName(
-                  isActivePath(pathname, child.href),
-                  "py-2 pl-10"
-                )}
-              >
-                {ChildIcon && <ChildIcon className="size-4 shrink-0" />}
-                {child.label}
-              </Link>
-            );
-          })}
+      <div
+        id={panelId}
+        ref={panelRef}
+        className="sb-sub"
+        hidden={!open && !flyout}
+        onMouseEnter={openFlyout}
+        onMouseLeave={scheduleClose}
+      >
+        <div className="sb-sub-inner">
+          <div className="sb-flyout-title">{item.label}</div>
+          <ul>
+            {item.children.map((child) => {
+              const active = isActivePath(pathname, child.href);
+              return (
+                <li
+                  key={child.href}
+                  className={`sb-item sb-level-2${active ? " is-active" : ""}`}
+                >
+                  <Link
+                    href={child.href}
+                    className="sb-link"
+                    onClick={onNavigate}
+                  >
+                    <span className="sb-label">{child.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
-      )}
-    </div>
+      </div>
+    </li>
   );
 }
 
-export function Sidebar({ navItems }: SidebarProps) {
+export function Sidebar({
+  navItems,
+  contracted,
+  mobileOpen,
+  animate,
+  onCloseMobile,
+}: SidebarProps) {
   const pathname = usePathname();
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [flyoutGroup, setFlyoutGroup] = useState<string | null>(null);
+
+  useEffect(() => {
+    const activeGroup = navItems.find(
+      (item) =>
+        isNavGroup(item) &&
+        item.children.some((child) => isActivePath(pathname, child.href))
+    );
+    setOpenGroup(activeGroup && isNavGroup(activeGroup) ? activeGroup.label : null);
+    setFlyoutGroup(null);
+  }, [pathname, navItems]);
+
+  const className = [
+    "sb-sidebar",
+    animate ? "sb-animate" : "",
+    contracted ? "contracted" : "",
+    mobileOpen ? "is-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <aside className="flex h-full w-56 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
-      <div className="flex flex-col items-center gap-1 px-4 py-6 text-center">
-        <BrandLogo className="w-[90%] translate-x-[6%]" priority />
-        <p className="text-xs text-sidebar-foreground/60">
-          Aviation Intelligence
-        </p>
+    <nav className={className} aria-label="Main navigation">
+      <div className="sb-header">
+        <Link href="/home">
+          <img
+            src="/brand/logo_white_sidebar.png"
+            alt="SelfBrief"
+            className="sb-logo"
+          />
+          <img
+            src="/brand/logo_mark_sidebar.png"
+            alt=""
+            className="sb-logo sb-logo-contracted"
+          />
+        </Link>
+        <button
+          type="button"
+          className="sb-close"
+          aria-label="Close navigation"
+          onClick={onCloseMobile}
+        >
+          <XIcon size={16} />
+        </button>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-2">
-        {navItems.map((item) =>
-          isNavGroup(item) ? (
-            <NavGroupItem key={item.label} item={item} pathname={pathname} />
-          ) : (
-            <NavLinkItem key={item.href} item={item} pathname={pathname} />
-          )
-        )}
-      </nav>
-    </aside>
+      <div className="sb-body">
+        <ul className="sb-nav">
+          {navItems.map((item) =>
+            isNavGroup(item) ? (
+              <NavGroupItem
+                key={item.label}
+                item={item}
+                pathname={pathname}
+                contracted={contracted}
+                open={openGroup === item.label}
+                flyout={flyoutGroup === item.label}
+                onToggle={() =>
+                  setOpenGroup((current) =>
+                    current === item.label ? null : item.label
+                  )
+                }
+                onFlyoutChange={(show) => {
+                  if (!contracted) return;
+                  setFlyoutGroup(show ? item.label : null);
+                }}
+                onNavigate={onCloseMobile}
+              />
+            ) : (
+              <NavLinkItem
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                onNavigate={onCloseMobile}
+              />
+            )
+          )}
+        </ul>
+      </div>
+    </nav>
   );
 }
