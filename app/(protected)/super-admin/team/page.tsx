@@ -53,7 +53,7 @@ export default function SelfBriefTeamPage() {
       <div className="mb-8">
         <div className="flex items-center gap-2">
           <ShieldCheckIcon className="size-5 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">SelfBrief Team</h1>
+          <h1 className="text-2xl font-bold text-foreground">SelfBrief Team Accounts</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Manage the {org.name} team. Super-admin access can only be granted here,

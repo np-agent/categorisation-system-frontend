@@ -64,7 +64,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["super-admin"],
     children: [
       {
-        label: "SelfBrief Team",
+        label: "SelfBrief Team Accounts",
         href: "/super-admin/team",
         roles: ["super-admin"],
         icon: "shield",

@@ -3,27 +3,32 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChevronRightIcon, XIcon } from "lucide-react";
+import { config } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  BriefcaseIcon,
-  BuildingIcon,
-  ChevronRightIcon,
-  FileTextIcon,
-  MapPinIcon,
-  PlusCircleIcon,
-  ShieldCheckIcon,
-  WrenchIcon,
-  XIcon,
-} from "lucide-react";
+  faBriefcase,
+  faBuilding,
+  faCirclePlus,
+  faFileLines,
+  faLocationDot,
+  faShieldHalved,
+  faWrench,
+} from "@fortawesome/free-solid-svg-icons";
+import "@fortawesome/fontawesome-svg-core/styles.css";
 import { isNavGroup, type NavGroup, type NavItem, type NavLink } from "@/lib/navigation";
 
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  "plus-circle": PlusCircleIcon,
-  briefcase: BriefcaseIcon,
-  "file-text": FileTextIcon,
-  "map-pin": MapPinIcon,
-  building: BuildingIcon,
-  shield: ShieldCheckIcon,
-  wrench: WrenchIcon,
+config.autoAddCss = false;
+
+const ICON_MAP: Record<string, IconDefinition> = {
+  "plus-circle": faCirclePlus,
+  briefcase: faBriefcase,
+  "file-text": faFileLines,
+  "map-pin": faLocationDot,
+  building: faBuilding,
+  shield: faShieldHalved,
+  wrench: faWrench,
 };
 
 type SidebarProps = {
@@ -43,11 +48,11 @@ function groupPanelId(label: string) {
 }
 
 function NavIcon({ name }: { name: string }) {
-  const Icon = ICON_MAP[name];
-  if (!Icon) return null;
+  const icon = ICON_MAP[name];
+  if (!icon) return null;
   return (
     <span className="sb-icon">
-      <Icon className="sb-icon-svg" />
+      <FontAwesomeIcon icon={icon} className="sb-icon-svg" />
     </span>
   );
 }
@@ -240,7 +245,7 @@ export function Sidebar({
   return (
     <nav className={className} aria-label="Main navigation">
       <div className="sb-header">
-        <Link href="/home">
+        <Link href="/home" className="sb-brand">
           <img
             src="/brand/logo_white_sidebar.png"
             alt="SelfBrief"
@@ -251,6 +256,7 @@ export function Sidebar({
             alt=""
             className="sb-logo sb-logo-contracted"
           />
+          <span className="sb-product">Airport Categorisation</span>
         </Link>
         <button
           type="button"
