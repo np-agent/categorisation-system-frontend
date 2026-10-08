@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { SessionAuth } from "supertokens-auth-react/recipe/session";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
 type Props = {
   children: React.ReactNode;
@@ -9,16 +10,21 @@ type Props = {
 
 /**
  * Client-side session gate for protected pages.
- * Complements Next.js middleware (which checks the SuperTokens front-token cookie).
+ * Complements Next.js middleware, which checks the Auth.js session cookie.
  */
 export function ProtectedRoute({ children }: Props) {
-  const [mounted, setMounted] = useState(false);
+  const { doesSessionExist, loading, error } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (loading) return;
+    if (!doesSessionExist) {
+      const reason = error ? "session" : "";
+      router.replace(reason ? `/login?error=${reason}` : "/login");
+    }
+  }, [doesSessionExist, loading, error, router]);
 
-  if (!mounted) {
+  if (loading || !doesSessionExist) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-center">
@@ -29,5 +35,5 @@ export function ProtectedRoute({ children }: Props) {
     );
   }
 
-  return <SessionAuth>{children}</SessionAuth>;
+  return <>{children}</>;
 }

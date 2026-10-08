@@ -48,8 +48,8 @@ export function EulaGate({ isUpdate, onAccepted }: EulaGateProps) {
 
   async function handleDecline() {
     try {
-      const { signOut } = await import("supertokens-auth-react/recipe/session");
-      await signOut();
+      const { signOut } = await import("next-auth/react");
+      await signOut({ redirect: false });
     } catch {
       // Session may already be gone.
     }

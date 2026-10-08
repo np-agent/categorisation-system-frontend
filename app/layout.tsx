@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Poppins } from "next/font/google";
-import { SuperTokensProvider } from "@/components/providers/supertokens-provider";
+import { SessionProvider } from "@/components/providers/session-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 import "@/styles/sidebar.css";
@@ -41,9 +41,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <SuperTokensProvider>
+        <SessionProvider>
           <TooltipProvider>{children}</TooltipProvider>
-        </SuperTokensProvider>
+        </SessionProvider>
       </body>
     </html>
   );
