@@ -124,7 +124,7 @@ export type InviteStatus = "pending" | "accepted";
 
 export type UserOut = {
   id: string;
-  supertokens_user_id: string;
+  cms_user_id?: string | null;
   email: string;
   full_name: string;
   organization_id: string;

@@ -1,21 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { api } from "@/lib/api";
 
 export default function ProfilePage() {
-  const [fullName, setFullName] = useState("niharika");
+  const { user, loading, refresh } = useCurrentUser();
+  const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (user) setFullName(user.full_name);
+  }, [user]);
 
   async function handleSave() {
+    if (!fullName.trim()) return;
     setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setIsSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setError("");
+    try {
+      await api.patch(
+        `/api/v1/me?full_name=${encodeURIComponent(fullName.trim())}`
+      );
+      await refresh();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save your name.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (loading || !user) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <div className="h-9 w-40 animate-pulse rounded bg-muted" />
+      </div>
+    );
   }
 
   return (
@@ -44,7 +70,7 @@ export default function ProfilePage() {
             <Label htmlFor="email">Email Address</Label>
             <Input
               id="email"
-              value="np@selfbrief.aero"
+              value={user.email}
               disabled
               className="cursor-not-allowed opacity-70"
             />
@@ -54,8 +80,10 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
+
         <div className="mt-6 flex items-center gap-3">
-          <Button onClick={handleSave} disabled={isSaving}>
+          <Button onClick={handleSave} disabled={isSaving || !fullName.trim()}>
             {isSaving ? "Saving..." : "Save Changes"}
           </Button>
           {saved && (

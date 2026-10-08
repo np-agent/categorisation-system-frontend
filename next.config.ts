@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  transpilePackages: ["supertokens-auth-react"],
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { auth } from "@/auth";
 
 const PUBLIC_PATHS = ["/login", "/reset-password"];
 
@@ -9,35 +9,32 @@ function isPublicPath(pathname: string) {
   );
 }
 
-function hasSessionFrontToken(request: NextRequest) {
-  // SuperTokens sets sFrontToken when a session exists (including header auth mode).
-  return Boolean(request.cookies.get("sFrontToken")?.value);
-}
-
-export function middleware(request: NextRequest) {
-  const { pathname, searchParams } = request.nextUrl;
+export default auth((request) => {
+  const { pathname } = request.nextUrl;
 
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
+    pathname.startsWith("/api/auth") ||
     pathname.includes(".")
   ) {
     return NextResponse.next();
   }
 
-  const isAuthenticated = hasSessionFrontToken(request);
+  const isAuthenticated = Boolean(request.auth) && !request.auth?.error;
   const isPublic = isPublicPath(pathname);
-  const isPasswordResetWithToken =
-    pathname.startsWith("/reset-password") && searchParams.has("token");
 
   if (!isAuthenticated && !isPublic) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("redirectTo", pathname);
+    if (request.auth?.error) {
+      loginUrl.searchParams.set("error", "session");
+    }
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isAuthenticated && isPublic && !isPasswordResetWithToken) {
+  if (isAuthenticated && isPublic) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/home";
     homeUrl.search = "";
@@ -47,11 +44,12 @@ export function middleware(request: NextRequest) {
   if (pathname === "/") {
     const target = request.nextUrl.clone();
     target.pathname = isAuthenticated ? "/home" : "/login";
+    target.search = "";
     return NextResponse.redirect(target);
   }
 
   return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|.*\\..*).*)"],

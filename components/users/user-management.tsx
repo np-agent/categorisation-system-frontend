@@ -5,9 +5,7 @@ import {
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CopyIcon,
   MailIcon,
-  PlusIcon,
   SearchIcon,
   UserCheckIcon,
   UserIcon,
@@ -24,7 +22,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import {
   Select,
@@ -145,7 +142,6 @@ export function UserManagement({
     () => new Set(DEFAULT_STATUSES)
   );
   const [page, setPage] = useState(1);
-  const [showInvite, setShowInvite] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState<UserOut | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -267,15 +263,9 @@ export function UserManagement({
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
         </div>
-        <Button
-          onClick={() => setShowInvite(true)}
-          disabled={!orgActive}
-          title={orgActive ? undefined : "Reactivate this organisation to invite users"}
-          className="shrink-0"
-        >
-          <PlusIcon className="mr-2 size-4" />
-          Invite User
-        </Button>
+        <p className="max-w-xs shrink-0 text-right text-xs text-muted-foreground">
+          Users appear here after they sign in with SelfBrief.
+        </p>
       </div>
 
       {actionError && (
@@ -361,7 +351,6 @@ export function UserManagement({
                 <UserRow
                   key={user.id}
                   user={user}
-                  orgId={orgId}
                   roleOptions={roleOptions}
                   isSelf={currentUser?.id === user.id}
                   orgActive={orgActive}
@@ -408,17 +397,6 @@ export function UserManagement({
           )}
         </div>
       )}
-
-      <InviteUserDialog
-        open={showInvite}
-        orgId={orgId}
-        roleOptions={roleOptions}
-        onClose={() => setShowInvite(false)}
-        onInvited={(newUser) => {
-          setUsers((prev) => [...prev, newUser]);
-          setShowInvite(false);
-        }}
-      />
 
       {deactivateTarget && (
         <ConfirmDeactivateDialog
@@ -487,12 +465,11 @@ function ConfirmDeactivateDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Row: inline role select, status, archive/restore, copy invite link
+// Row: inline role select, status, archive/restore
 // ---------------------------------------------------------------------------
 
 function UserRow({
   user,
-  orgId,
   roleOptions,
   isSelf,
   orgActive,
@@ -500,36 +477,16 @@ function UserRow({
   onToggleActive,
 }: {
   user: UserOut;
-  orgId: string;
   roleOptions: AppRole[];
   isSelf: boolean;
   orgActive: boolean;
   onRoleChange: (userId: string, role: AppRole) => void;
   onToggleActive: (user: UserOut) => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const [loadingLink, setLoadingLink] = useState(false);
-
   const status = userStatus(user);
   // A legacy super-admin sitting in a customer org must not silently lose its
   // value through a select that has no matching option.
   const roleIsSelectable = roleOptions.includes(user.role) && !isSelf;
-
-  async function handleCopyLink() {
-    setLoadingLink(true);
-    try {
-      const res = await api.get<{ invite_link: string }>(
-        `/api/v1/organisations/${orgId}/invite/${user.id}/link`
-      );
-      await navigator.clipboard.writeText(res.invite_link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingLink(false);
-    }
-  }
 
   return (
     <TableRow>
@@ -586,22 +543,6 @@ function UserRow({
       </TableCell>
       <TableCell className="pr-5 text-right align-middle">
         <div className="flex items-center justify-end gap-1">
-          {status === "pending" && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              title="Copy invite link"
-              onClick={handleCopyLink}
-              disabled={loadingLink}
-            >
-              {copied ? (
-                <CheckIcon className="size-3.5 text-green-600" />
-              ) : (
-                <CopyIcon className="size-3.5" />
-              )}
-            </Button>
-          )}
           {!isSelf && (
             <Button
               variant="ghost"
@@ -633,144 +574,5 @@ function UserRow({
         </div>
       </TableCell>
     </TableRow>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Invite dialog
-// ---------------------------------------------------------------------------
-
-function InviteUserDialog({
-  open,
-  orgId,
-  roleOptions,
-  onClose,
-  onInvited,
-}: {
-  open: boolean;
-  orgId: string;
-  roleOptions: AppRole[];
-  onClose: () => void;
-  onInvited: (user: UserOut) => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
-  const defaultRole = roleOptions[0] ?? "user";
-  const [role, setRole] = useState<AppRole>(defaultRole);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (open) setRole(roleOptions[0] ?? "user");
-  }, [open, roleOptions]);
-
-  function handleClose() {
-    setEmail("");
-    setFullName("");
-    setRole(roleOptions[0] ?? "user");
-    setError(null);
-    setDone(false);
-    onClose();
-  }
-
-  async function handleInvite() {
-    if (!email.trim()) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const newUser = await api.post<UserOut>(
-        `/api/v1/organisations/${orgId}/invite`,
-        { email, role, full_name: fullName || undefined }
-      );
-      onInvited(newUser);
-      setDone(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to invite user");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="max-w-md sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Invite User</DialogTitle>
-        </DialogHeader>
-
-        {done ? (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <div className="flex size-12 items-center justify-center rounded-full bg-green-100">
-              <CheckIcon className="size-6 text-green-600" />
-            </div>
-            <p className="font-medium text-foreground">Invite sent</p>
-            <p className="text-sm text-muted-foreground">
-              An email has been sent to <strong>{email}</strong> with a link to set
-              their password and join.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 py-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="invite-email">
-                Email <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="user@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleInvite(); }}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="invite-name">Full Name (optional)</Label>
-              <Input
-                id="invite-name"
-                placeholder="Jane Smith"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {roleOptions.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {ROLE_LABEL[r]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {roleOptions.length === 1 && roleOptions[0] === "super-admin"
-                  ? "Super admins manage the whole platform."
-                  : roleOptions.includes("super-admin")
-                    ? "Super admins manage the whole platform. Admins and users can create jobs and view every job in their organisation."
-                    : "Users and admins can create jobs and view every job in their organisation."}
-              </p>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            {done ? "Close" : "Cancel"}
-          </Button>
-          {!done && (
-            <Button onClick={handleInvite} disabled={!email.trim() || saving}>
-              {saving ? "Sending..." : "Send Invite"}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

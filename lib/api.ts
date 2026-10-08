@@ -1,14 +1,36 @@
 /**
  * Thin wrapper around fetch for backend API calls.
  *
- * SuperTokens writes a session cookie on login, so we just need
- * credentials: "include" on every request and the cookie is sent automatically.
- * Automatic token refresh is handled by the SuperTokens session interceptor
- * configured in lib/supertoken.ts.
+ * Auth.js keeps the CMS access token in an encrypted session cookie.
+ * Each request attaches it as Authorization: Bearer ...
  */
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+
+async function getAccessToken(): Promise<string | null> {
+  if (typeof window === "undefined") {
+    const { auth } = await import("@/auth");
+    const session = await auth();
+    return session?.accessToken ?? null;
+  }
+  const { getSession } = await import("next-auth/react");
+  const session = await getSession();
+  return session?.accessToken ?? null;
+}
+
+async function signOutToLogin(reason?: string) {
+  if (typeof window === "undefined") return;
+  if (window.location.pathname === "/login") return;
+  try {
+    const { signOut } = await import("next-auth/react");
+    await signOut({ redirect: false });
+  } catch {
+    // Session may already be gone; the redirect below still applies.
+  }
+  const query = reason ? `?error=${reason}` : "";
+  window.location.href = `/login${query}`;
+}
 
 /**
  * The backend answers 403 for a deactivated account or organisation. Handling
@@ -16,31 +38,26 @@ const API_BASE =
  * caller having to notice and the user being left on a half-broken page.
  */
 async function handleRevokedAccess(detail: string) {
-  if (typeof window === "undefined") return;
-  // Already on the login screen — it shows the message inline instead.
-  if (window.location.pathname === "/login") return;
-
   const reason = /organisation/i.test(detail) ? "org_deactivated" : "deactivated";
-  try {
-    const { signOut } = await import("supertokens-auth-react/recipe/session");
-    await signOut();
-  } catch {
-    // Session may already be gone; the redirect below still applies.
-  }
-  window.location.href = `/login?error=${reason}`;
+  await signOutToLogin(reason);
 }
 
 async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  const token = await getAccessToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {
@@ -51,8 +68,14 @@ async function request<T>(
     } catch {
       // ignore parse errors
     }
+    if (res.status === 401) {
+      await signOutToLogin("session");
+    }
     if (res.status === 403 && /deactivated/i.test(detail)) {
       await handleRevokedAccess(detail);
+    }
+    if (res.status === 403 && /not permitted|no organisation/i.test(detail)) {
+      await signOutToLogin("AccessDenied");
     }
 
     const err = new Error(detail) as Error & { status: number };
@@ -60,7 +83,6 @@ async function request<T>(
     throw err;
   }
 
-  // 204 No Content — return undefined rather than trying to parse an empty body
   if (res.status === 204) return undefined as unknown as T;
 
   return res.json() as Promise<T>;
