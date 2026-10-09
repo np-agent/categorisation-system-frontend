@@ -4,14 +4,11 @@ import { useEffect, useState } from "react";
 import { ShieldCheckIcon } from "lucide-react";
 import { UserManagement } from "@/components/users/user-management";
 import { api } from "@/lib/api";
-import type { AppRole, OrganizationOut } from "@/lib/api-types";
-
-const TEAM_ROLES: AppRole[] = ["super-admin"];
+import type { OrganizationOut } from "@/lib/api-types";
 
 /**
- * The internal SelfBrief team. Kept separate from Manage Organisations so
- * platform-level access is never granted from a customer's user list —
- * super-admin can only be assigned here.
+ * The internal SelfBrief team, kept separate from customer organisations.
+ * Super-admin access is assigned in SelfBrief, then shown here after sign-in.
  */
 export default function SelfBriefTeamPage() {
   const [org, setOrg] = useState<OrganizationOut | null>(null);
@@ -56,18 +53,14 @@ export default function SelfBriefTeamPage() {
           <h1 className="text-2xl font-bold text-foreground">SelfBrief Team Accounts</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage the {org.name} team. Super-admin access can only be granted here,
-          never from a customer organisation.
+          The {org.name} team. Super-admin access is granted in SelfBrief, not here.
         </p>
       </div>
 
       <UserManagement
         orgId={org.id}
-        allowSuperAdmin
-        allowedRoles={TEAM_ROLES}
-        orgActive={org.is_active}
         title="Team Members"
-        description="Invite Super Admins to manage the whole platform."
+        description="People who have signed in as a SelfBrief super-admin."
       />
     </div>
   );
