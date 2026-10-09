@@ -80,6 +80,7 @@ export function TemplateManager({
       const haystack = [
         t.name,
         t.description ?? "",
+        t.created_by_name ?? "",
         t.created_by_email ?? "",
       ]
         .join(" ")
@@ -353,7 +354,7 @@ function TemplateRow({
           {template.content.length} characters
         </p>
         <p className="text-xs text-muted-foreground">
-          Created by: {template.created_by_email || "—"}
+          Created by: {template.created_by_name?.trim() || template.created_by_email || "—"}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-2">
@@ -481,12 +482,12 @@ function CreateTemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg sm:max-w-lg">
+      <DialogContent className="max-w-lg overflow-visible sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Create New Template</DialogTitle>
         </DialogHeader>
 
-        <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
+        <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto p-1.5">
           <div className="flex flex-col gap-1.5">
             <Label>
               Template Name <span className="text-destructive">*</span>

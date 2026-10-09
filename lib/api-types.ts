@@ -36,6 +36,7 @@ export type PromptTemplateOut = {
   content: string;
   is_active: boolean;
   created_by_user_id: string | null;
+  created_by_name: string | null;
   created_by_email: string | null;
   created_at: string;
   updated_at: string;
@@ -113,6 +114,7 @@ export type JobSummary = {
   airport_name: string | null;
   template_name: string | null;
   created_by_user_id: string;
+  created_by_name: string | null;
   created_by_email: string | null;
   batch_id: string | null;
   created_at: string;
