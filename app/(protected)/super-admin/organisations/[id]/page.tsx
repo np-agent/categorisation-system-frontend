@@ -249,7 +249,6 @@ export default function OrgDetailPage() {
       <UserManagement
         key={org.is_active ? "org-active" : "org-inactive"}
         orgId={orgId}
-        orgActive={org.is_active}
       />
 
       <EditNameDialog

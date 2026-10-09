@@ -120,7 +120,6 @@ export type JobSummary = {
 };
 
 export type AppRole = "super-admin" | "admin" | "user";
-export type InviteStatus = "pending" | "accepted";
 
 export type UserOut = {
   id: string;
@@ -132,7 +131,6 @@ export type UserOut = {
   is_active: boolean;
   /** True when the org being deactivated switched this user off. */
   deactivated_by_org: boolean;
-  invite_status: InviteStatus;
   created_at: string;
   eula_accepted: boolean;
   eula_accepted_at: string | null;
