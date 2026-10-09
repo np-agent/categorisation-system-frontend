@@ -144,16 +144,16 @@ export default function ManageAirportsPage() {
           </div>
         </div>
 
-        <Table className="table-fixed [&_th]:h-12 [&_th]:px-3 [&_td]:px-3 [&_td]:py-3">
+        <Table className="[&_th]:h-12 [&_th]:px-3 [&_td]:px-3 [&_td]:py-3">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[9%] pl-5">ICAO</TableHead>
-              <TableHead className="w-[28%]">Airport Name</TableHead>
-              <TableHead className="w-[12%]">Country</TableHead>
-              <TableHead className="w-[15%]">AIP Status</TableHead>
-              <TableHead className="w-[8%]">Pages</TableHead>
-              <TableHead className="w-[14%]">Last Updated</TableHead>
-              <TableHead className="w-[14%] pr-5">Actions</TableHead>
+              <TableHead className="pl-5">ICAO</TableHead>
+              <TableHead>Airport Name</TableHead>
+              <TableHead>Country</TableHead>
+              <TableHead>AIP Status</TableHead>
+              <TableHead>Pages</TableHead>
+              <TableHead className="whitespace-nowrap">Last Updated</TableHead>
+              <TableHead className="pr-5 whitespace-nowrap">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -208,12 +208,12 @@ export default function ManageAirportsPage() {
                   <TableCell className="align-middle text-sm tabular-nums text-muted-foreground">
                     {airport.page_count != null ? airport.page_count : "—"}
                   </TableCell>
-                  <TableCell className="align-middle text-sm text-muted-foreground">
+                  <TableCell className="align-middle whitespace-nowrap text-sm text-muted-foreground">
                     {airport.last_updated
                       ? formatDateTime(airport.last_updated)
                       : "—"}
                   </TableCell>
-                  <TableCell className="pr-5 align-middle">
+                  <TableCell className="pr-5 align-middle whitespace-nowrap">
                     <Button
                       variant="outline"
                       size="sm"

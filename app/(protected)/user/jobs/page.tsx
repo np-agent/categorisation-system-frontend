@@ -303,7 +303,7 @@ export default function ViewJobsPage() {
                   {showCreatedBy && (
                     <TableCell className="align-middle">
                       <TruncatedText
-                        text={job.created_by_email}
+                        text={job.created_by_name?.trim() || job.created_by_email}
                         className="text-sm text-muted-foreground"
                       />
                     </TableCell>
