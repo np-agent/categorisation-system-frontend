@@ -10,10 +10,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
-import type { JobOut } from "@/lib/api-types";
+import type { JobFinalResult, JobOut, QuestionAnswer } from "@/lib/api-types";
 import { formatDateTime } from "@/lib/format";
 import { api } from "@/lib/api";
 
@@ -27,7 +30,81 @@ type JobDetailsDialogProps = {
   open: boolean;
   onClose: () => void;
   onAcknowledged?: (job: JobOut) => void;
+  onReviewed?: (job: JobOut) => void;
 };
+
+const ANSWER_LABEL: Record<string, string> = {
+  yes: "Yes",
+  no: "No",
+  unknown: "Not found",
+};
+
+const CONFIDENCE_LABEL: Record<string, string> = {
+  HIGH: "High",
+  MEDIUM: "Medium",
+  LOW: "Low",
+};
+
+function StructuredResult({ result }: { result: JobFinalResult }) {
+  const groups: { code: string; rows: QuestionAnswer[] }[] = [];
+  for (const row of result.answers) {
+    const last = groups[groups.length - 1];
+    if (last && last.code === row.category_code) {
+      last.rows.push(row);
+    } else {
+      groups.push({ code: row.category_code, rows: [row] });
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-lg border bg-muted/30 p-4">
+        <p className="text-xs text-muted-foreground">Suggested category</p>
+        <p className="mt-1 text-lg font-semibold text-foreground">
+          {result.final_category ?? "No category met"}
+        </p>
+        {result.confidence_level && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Confidence: {CONFIDENCE_LABEL[result.confidence_level] ?? result.confidence_level}
+          </p>
+        )}
+        {!result.final_category && (
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            A category is met only when every question under it is yes.
+          </p>
+        )}
+      </div>
+
+      {groups.map((group) => (
+        <section key={group.code}>
+          <h4 className="mb-2 text-sm font-semibold text-foreground">{group.code}</h4>
+          <div className="flex flex-col gap-2">
+            {group.rows.map((row) => (
+              <div key={row.question_id} className="rounded-lg border px-3 py-2.5">
+                <p className="text-sm font-medium text-foreground">{row.question_text}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {ANSWER_LABEL[row.answer ?? ""] ?? "Not found"}
+                  {row.confidence_level
+                    ? ` · ${CONFIDENCE_LABEL[row.confidence_level] ?? row.confidence_level}`
+                    : ""}
+                  {row.page ? ` · page ${row.page}` : ""}
+                </p>
+                {row.evidence && (
+                  <p className="mt-1 text-sm leading-relaxed text-foreground">{row.evidence}</p>
+                )}
+                {row.needs_manual && (
+                  <p className="mt-1 text-xs font-medium text-amber-700">
+                    A person needs to check this.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
 
 function ResultMarkdown({ text }: { text: string }) {
   return (
@@ -67,24 +144,52 @@ function ResultMarkdown({ text }: { text: string }) {
   );
 }
 
-export function JobDetailsDialog({ job, open, onClose, onAcknowledged }: JobDetailsDialogProps) {
+export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewed }: JobDetailsDialogProps) {
   const [ack, setAck] = useState<AckState>("pending");
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [finalCategory, setFinalCategory] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setAck(job?.advisory_acknowledged ? "accepted" : "pending");
       setChecked(false);
       setSubmitting(false);
+      setNotes(job?.reviewed_notes ?? "");
+      setFinalCategory(job?.reviewed_category ?? "");
+      setReviewError(null);
     }
-  }, [open, job?.id, job?.advisory_acknowledged]);
+  }, [open, job?.id, job?.advisory_acknowledged, job?.reviewed_notes, job?.reviewed_category]);
 
   if (!job) return null;
 
   const latestResult = job.final_result;
-  const hasResult = Boolean(latestResult && !latestResult.error && latestResult.raw_text);
+  const hasAnswers = (latestResult?.answers?.length ?? 0) > 0;
+  const hasResult = Boolean(
+    latestResult && !latestResult.error && (hasAnswers || latestResult.raw_text)
+  );
   const showAdvisory = hasResult && ack === "pending";
+
+  async function handleSaveReview() {
+    if (!job) return;
+    setSavingReview(true);
+    setReviewError(null);
+    try {
+      const updated = await api.patch<JobOut>(`/api/v1/jobs/${job.id}/review`, {
+        notes,
+        final_category: finalCategory,
+        close: job.status === "ended",
+      });
+      onReviewed?.(updated);
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : "Could not save the review.");
+    } finally {
+      setSavingReview(false);
+    }
+  }
 
   async function handleContinue() {
     if (!job || !checked) return;
@@ -167,21 +272,58 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged }: JobDeta
                     <p className="text-muted-foreground">Template</p>
                     <p className="mt-0.5 font-medium">{job.template_name ?? "—"}</p>
                   </div>
-                  {job.batch_id && (
-                    <div className="col-span-2">
-                      <p className="text-muted-foreground">Batch ID</p>
-                      <p className="mt-0.5 break-all font-mono text-xs">{job.batch_id}</p>
-                    </div>
-                  )}
                 </div>
               </section>
 
-              {hasResult && ack === "accepted" && latestResult?.raw_text && (
+              {hasResult && ack === "accepted" && latestResult && (
                 <>
                   <Separator />
                   <section>
                     <h3 className="mb-3 text-sm font-semibold text-foreground">Results</h3>
-                    <ResultMarkdown text={latestResult.raw_text} />
+                    {hasAnswers ? (
+                      <StructuredResult result={latestResult} />
+                    ) : (
+                      latestResult.raw_text && <ResultMarkdown text={latestResult.raw_text} />
+                    )}
+                    <div className="mt-6 flex flex-col gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="review-notes">Notes</Label>
+                        <Textarea
+                          id="review-notes"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          className="min-h-[88px] resize-y text-sm"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="review-category">Final category</Label>
+                        <Input
+                          id="review-category"
+                          value={finalCategory}
+                          onChange={(e) => setFinalCategory(e.target.value)}
+                          className="text-sm md:text-sm"
+                        />
+                      </div>
+                      {job.status === "ended" && !finalCategory.trim() && (
+                        <p className="text-sm text-muted-foreground">
+                          Enter a final category to close the job.
+                        </p>
+                      )}
+                      {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="self-start"
+                        onClick={handleSaveReview}
+                        disabled={savingReview || (job.status === "ended" && !finalCategory.trim())}
+                      >
+                        {savingReview
+                          ? "Saving..."
+                          : job.status === "closed"
+                            ? "Save"
+                            : "Save and close the job"}
+                      </Button>
+                    </div>
                   </section>
                 </>
               )}
@@ -233,7 +375,17 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged }: JobDeta
                 </>
               )}
 
-              {(job.status === "pending" || job.status === "running") && (
+              {job.status === "pending" && (
+                <>
+                  <Separator />
+                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+                    This job is queued. It starts when an earlier job finishes.
+                    Refresh the page shortly to see the updated status.
+                  </div>
+                </>
+              )}
+
+              {job.status === "running" && (
                 <>
                   <Separator />
                   <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">

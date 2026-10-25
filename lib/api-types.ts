@@ -28,11 +28,24 @@ export type TemplateSummary = {
   description: string | null;
 };
 
+export type TemplateQuestion = {
+  id: string;
+  text: string;
+};
+
+export type TemplateCategory = {
+  id: string;
+  code: string;
+  questions: TemplateQuestion[];
+};
+
 export type PromptTemplateOut = {
   id: string;
   name: string;
   category: string | null;
   description: string | null;
+  notes: string;
+  categories: TemplateCategory[];
   content: string;
   is_active: boolean;
   created_by_user_id: string | null;
@@ -46,6 +59,7 @@ export type JobStatus =
   | "pending"
   | "running"
   | "ended"
+  | "closed"
   | "failed"
   | "awaiting_aip";
 
@@ -71,11 +85,36 @@ export type JobSynthesis = {
   error: string | null;
 };
 
+export type QuestionAnswer = {
+  category_id: string;
+  category_code: string;
+  question_id: string;
+  question_text: string;
+  answer: "yes" | "no" | "unknown" | null;
+  evidence: string;
+  confidence_level: "HIGH" | "MEDIUM" | "LOW" | null;
+  needs_manual: boolean;
+  page: number | null;
+  user_answer: "yes" | "no" | null;
+  user_evidence: string | null;
+};
+
+export type ReviewAuditEntry = {
+  field: "notes" | "final_category";
+  action: "added" | "updated";
+  previous_value: string;
+  value: string;
+  user_id: string;
+  user_name: string;
+  at: string;
+};
+
 export type JobFinalResult = {
   raw_text: string;
   final_category: string | null;
   confidence_level: string | null;
   error: string | null;
+  answers: QuestionAnswer[];
   created_at: string;
 };
 
@@ -90,7 +129,6 @@ export type JobOut = {
   template_id: string;
   template_name: string | null;
   status: JobStatus;
-  batch_id: string | null;
   airport_aip_s3_key: string | null;
   aip_unavailable_at: string | null;
   submitted_at: string | null;
@@ -99,6 +137,9 @@ export type JobOut = {
   chunks: JobChunk[];
   synthesis: JobSynthesis | null;
   final_result: JobFinalResult | null;
+  reviewed_notes: string;
+  reviewed_category: string;
+  review_audit: ReviewAuditEntry[];
   advisory_acknowledged: boolean;
   created_at: string;
   updated_at: string;
@@ -116,7 +157,7 @@ export type JobSummary = {
   created_by_user_id: string;
   created_by_name: string | null;
   created_by_email: string | null;
-  batch_id: string | null;
+  reviewed_category: string;
   created_at: string;
   updated_at: string;
 };
@@ -149,5 +190,6 @@ export type OrganizationOut = {
   slug: string;
   is_active: boolean;
   templates: string[];
+  job_instructions: string;
   created_at: string;
 };

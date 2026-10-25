@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import Link from "next/link";
 import {
   CheckIcon,
+  InfoIcon,
   PencilIcon,
   PlusIcon,
   SearchIcon,
@@ -15,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { TruncatedText } from "@/components/ui/truncated-text";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -24,21 +26,102 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
-import type { PromptTemplateOut } from "@/lib/api-types";
+import type { PromptTemplateOut, TemplateCategory } from "@/lib/api-types";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+type FormQuestion = { id: string; text: string };
+type FormCategory = { id: string; code: string; questions: FormQuestion[] };
 
 type EditingState = {
   name: string;
   description: string;
-  content: string;
+  notes: string;
+  categories: FormCategory[];
 };
+
+const NOTES_HINT =
+  "Say how the questions should be read. Every question is answered from the document. A category is met only when every question under it is yes. Categories are tested from top to bottom, so put the one that should win first at the top.";
+
+function newFormId(prefix: string) {
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+}
+
+function blankCategory(code = ""): FormCategory {
+  return {
+    id: newFormId("c"),
+    code,
+    questions: [{ id: newFormId("q"), text: "" }],
+  };
+}
 
 const EMPTY_TEMPLATE: EditingState = {
   name: "",
   description: "",
-  content: "",
+  notes: "",
+  categories: [blankCategory()],
 };
+
+function formFromTemplate(template: PromptTemplateOut): EditingState {
+  const categories = (template.categories ?? []).map((category) => ({
+    id: category.id || newFormId("c"),
+    code: category.code,
+    questions: category.questions.map((question) => ({
+      id: question.id || newFormId("q"),
+      text: question.text,
+    })),
+  }));
+  return {
+    name: template.name,
+    description: template.description ?? "",
+    notes: template.notes || (categories.length === 0 ? template.content : ""),
+    categories: categories.length > 0 ? categories : [blankCategory()],
+  };
+}
+
+function formProblem(state: EditingState): string | null {
+  if (!state.name.trim()) return "Add a template name.";
+  if (!state.notes.trim()) return "Add general notes.";
+  const started = state.categories.filter((category) => {
+    const hasCode = category.code.trim().length > 0;
+    const hasQuestion = category.questions.some((question) => question.text.trim());
+    return hasCode || hasQuestion;
+  });
+  if (started.length === 0) return "Add a category name and a question.";
+  const codes = new Set<string>();
+  for (const category of started) {
+    const code = category.code.trim();
+    if (!code) return "Each category needs a name.";
+    const key = code.toLowerCase();
+    if (codes.has(key)) return `Category ${code} is listed twice.`;
+    codes.add(key);
+    if (!category.questions.some((question) => question.text.trim())) {
+      return `Add a question under ${code}.`;
+    }
+  }
+  return null;
+}
+
+function templatePayload(state: EditingState) {
+  return {
+    name: state.name.trim(),
+    description: state.description.trim() || null,
+    notes: state.notes.trim(),
+    categories: state.categories
+      .map((category) => ({
+        id: category.id,
+        code: category.code.trim(),
+        questions: category.questions
+          .filter((question) => question.text.trim())
+          .map((question) => ({ id: question.id, text: question.text.trim() })),
+      }))
+      .filter((category) => category.code && category.questions.length > 0),
+  };
+}
+
+function questionCount(categories: TemplateCategory[] | undefined) {
+  return (categories ?? []).reduce((sum, category) => sum + category.questions.length, 0);
+}
 
 export function TemplateManager({
   mode,
@@ -54,6 +137,7 @@ export function TemplateManager({
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PromptTemplateOut | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const fetchTemplates = useCallback(async () => {
     setLoading(true);
@@ -80,6 +164,11 @@ export function TemplateManager({
       const haystack = [
         t.name,
         t.description ?? "",
+        t.notes ?? "",
+        ...(t.categories ?? []).flatMap((category) => [
+          category.code,
+          ...category.questions.map((question) => question.text),
+        ]),
         t.created_by_name ?? "",
         t.created_by_email ?? "",
       ]
@@ -91,11 +180,8 @@ export function TemplateManager({
 
   function startEdit(template: PromptTemplateOut) {
     setEditingId(template.id);
-    setEditState({
-      name: template.name,
-      description: template.description ?? "",
-      content: template.content,
-    });
+    setEditState(formFromTemplate(template));
+    setFormError(null);
   }
 
   function cancelEdit() {
@@ -105,18 +191,20 @@ export function TemplateManager({
 
   async function saveEdit(id: string) {
     if (!editState) return;
+    const problem = formProblem(editState);
+    if (problem) {
+      setFormError(problem);
+      return;
+    }
     setSaving(true);
+    setFormError(null);
     try {
-      const updated = await api.patch<PromptTemplateOut>(`/api/v1/templates/${id}`, {
-        name: editState.name.trim(),
-        description: editState.description.trim() || null,
-        content: editState.content,
-      });
+      const updated = await api.patch<PromptTemplateOut>(`/api/v1/templates/${id}`, templatePayload(editState));
       setTemplates((prev) => prev.map((t) => (t.id === id ? updated : t)));
       setEditingId(null);
       setEditState(null);
     } catch (err) {
-      console.error("Failed to save template:", err);
+      setFormError(err instanceof Error ? err.message : "Could not save the template.");
     } finally {
       setSaving(false);
     }
@@ -151,18 +239,20 @@ export function TemplateManager({
   const [newTemplate, setNewTemplate] = useState<EditingState>(EMPTY_TEMPLATE);
 
   async function createTemplate() {
+    const problem = formProblem(newTemplate);
+    if (problem) {
+      setFormError(problem);
+      return;
+    }
     setSaving(true);
+    setFormError(null);
     try {
-      await api.post<PromptTemplateOut>("/api/v1/templates", {
-        name: newTemplate.name.trim(),
-        description: newTemplate.description.trim() || null,
-        content: newTemplate.content,
-      });
+      await api.post<PromptTemplateOut>("/api/v1/templates", templatePayload(newTemplate));
       setNewTemplate(EMPTY_TEMPLATE);
       setShowCreateDialog(false);
       await fetchTemplates();
     } catch (err) {
-      console.error("Failed to create template:", err);
+      setFormError(err instanceof Error ? err.message : "Could not create the template.");
     } finally {
       setSaving(false);
     }
@@ -184,7 +274,16 @@ export function TemplateManager({
         {isActiveView && (
           <Button
             size="sm"
-            onClick={() => setShowCreateDialog(true)}
+            onClick={() => {
+              setNewTemplate({
+                name: "",
+                description: "",
+                notes: "",
+                categories: [blankCategory()],
+              });
+              setFormError(null);
+              setShowCreateDialog(true);
+            }}
             className="gap-1.5 shrink-0"
           >
             <PlusIcon className="size-4" />
@@ -228,12 +327,12 @@ export function TemplateManager({
                 <div key={template.id} className="px-6 py-5">
                   {isEditing && editState ? (
                     <InlineEditForm
-                      name={template.name}
                       state={editState}
                       onChange={setEditState}
                       onSave={() => saveEdit(template.id)}
                       onCancel={cancelEdit}
                       saving={saving}
+                      error={formError}
                     />
                   ) : (
                     <TemplateRow
@@ -266,6 +365,7 @@ export function TemplateManager({
         onCreate={createTemplate}
         onClose={() => setShowCreateDialog(false)}
         saving={saving}
+        error={formError}
       />
 
       <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
@@ -351,7 +451,9 @@ function TemplateRow({
           />
         ) : null}
         <p className="mt-1 text-xs text-muted-foreground">
-          {template.content.length} characters
+          {questionCount(template.categories) > 0
+            ? `${template.categories.length} categories, ${questionCount(template.categories)} questions`
+            : "No questions yet"}
         </p>
         <p className="text-xs text-muted-foreground">
           Created by: {template.created_by_name?.trim() || template.created_by_email || "—"}
@@ -396,52 +498,210 @@ function TemplateRow({
   );
 }
 
+function updateCategory(state: EditingState, categoryId: string, next: FormCategory): EditingState {
+  return {
+    ...state,
+    categories: state.categories.map((category) => (category.id === categoryId ? next : category)),
+  };
+}
+
+function TemplateFields({
+  state,
+  onChange,
+}: {
+  state: EditingState;
+  onChange: (s: EditingState) => void;
+}) {
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <Label>
+          Template Name <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          placeholder="e.g. Main template"
+          value={state.name}
+          onChange={(e) => onChange({ ...state, name: e.target.value })}
+          className="text-xs md:text-xs"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Description</Label>
+        <Input
+          placeholder="Brief description of what this template analyses"
+          value={state.description}
+          onChange={(e) => onChange({ ...state, description: e.target.value })}
+          className="text-xs md:text-xs"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label className="flex items-center gap-1.5">
+          General notes <span className="text-destructive">*</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="text-muted-foreground"
+                aria-label="About general notes"
+              >
+                <InfoIcon className="size-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs text-left">
+              {NOTES_HINT}
+            </TooltipContent>
+          </Tooltip>
+        </Label>
+        <Textarea
+          placeholder="Say how the questions should be read"
+          value={state.notes}
+          onChange={(e) => onChange({ ...state, notes: e.target.value })}
+          className="min-h-[120px] resize-y text-xs md:text-xs"
+        />
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {state.categories.map((category, index) => (
+          <div key={category.id} className="rounded-lg border p-3">
+            <div className="mb-3 flex items-center gap-2">
+              <Label className="shrink-0 text-xs">
+                Category
+                {index === 0 && <span className="text-destructive"> *</span>}
+              </Label>
+              <Input
+                value={category.code}
+                placeholder="Airport category"
+                onChange={(e) =>
+                  onChange(updateCategory(state, category.id, { ...category, code: e.target.value }))
+                }
+                className="h-8 max-w-[220px] text-xs md:text-xs"
+              />
+              <span className="ml-auto text-xs text-muted-foreground">
+                Tested {index === 0 ? "first" : `after ${state.categories[index - 1]?.code || "the one above"}`}
+              </span>
+              {state.categories.length > 1 && (
+                <button
+                  type="button"
+                  className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() =>
+                    onChange({
+                      ...state,
+                      categories: state.categories.filter((item) => item.id !== category.id),
+                    })
+                  }
+                  aria-label={`Remove category ${category.code || index + 1}`}
+                >
+                  <Trash2Icon className="size-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {category.questions.map((question, questionIndex) => (
+                <div key={question.id} className="flex items-start gap-2">
+                  <span className="mt-2 w-6 shrink-0 text-xs text-muted-foreground">
+                    {questionIndex + 1}.
+                    {index === 0 && questionIndex === 0 && (
+                      <span className="text-destructive">*</span>
+                    )}
+                  </span>
+                  <Textarea
+                    value={question.text}
+                    placeholder="Question the document must answer"
+                    onChange={(e) =>
+                      onChange(
+                        updateCategory(state, category.id, {
+                          ...category,
+                          questions: category.questions.map((item) =>
+                            item.id === question.id ? { ...item, text: e.target.value } : item
+                          ),
+                        })
+                      )
+                    }
+                    className="min-h-[52px] resize-y text-xs md:text-xs"
+                  />
+                  {category.questions.length > 1 && (
+                    <button
+                      type="button"
+                      className="mt-1 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() =>
+                        onChange(
+                          updateCategory(state, category.id, {
+                            ...category,
+                            questions: category.questions.filter((item) => item.id !== question.id),
+                          })
+                        )
+                      }
+                      aria-label="Remove question"
+                    >
+                      <XIcon className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-3 h-7 text-xs"
+              onClick={() =>
+                onChange(
+                  updateCategory(state, category.id, {
+                    ...category,
+                    questions: [...category.questions, { id: newFormId("q"), text: "" }],
+                  })
+                )
+              }
+            >
+              <PlusIcon className="size-3.5" />
+              Add question
+            </Button>
+          </div>
+        ))}
+
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="self-start"
+          onClick={() =>
+            onChange({
+              ...state,
+              categories: [...state.categories, blankCategory("")],
+            })
+          }
+        >
+          <PlusIcon className="size-3.5" />
+          Add category
+        </Button>
+      </div>
+    </>
+  );
+}
+
 function InlineEditForm({
-  name,
   state,
   onChange,
   onSave,
   onCancel,
   saving,
+  error,
 }: {
-  name: string;
   state: EditingState;
   onChange: (s: EditingState) => void;
   onSave: () => void;
   onCancel: () => void;
   saving: boolean;
+  error: string | null;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="font-semibold text-foreground">{name}</h3>
-
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Template Name</Label>
-        <Input
-          value={state.name}
-          onChange={(e) => onChange({ ...state, name: e.target.value })}
-          className="h-8 text-sm"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Description (optional)</Label>
-        <Input
-          value={state.description}
-          onChange={(e) => onChange({ ...state, description: e.target.value })}
-          className="h-8 text-sm"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Analysis Rules</Label>
-        <Textarea
-          value={state.content}
-          onChange={(e) => onChange({ ...state, content: e.target.value })}
-          className="min-h-[280px] max-h-[480px] resize-y overflow-y-auto text-sm font-mono"
-        />
-      </div>
-
+      <TemplateFields state={state} onChange={onChange} />
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={onSave} disabled={saving} className="gap-1.5">
           <CheckIcon className="size-3.5" />
@@ -469,6 +729,7 @@ function CreateTemplateDialog({
   onCreate,
   onClose,
   saving,
+  error,
 }: {
   open: boolean;
   state: EditingState;
@@ -476,58 +737,31 @@ function CreateTemplateDialog({
   onCreate: () => void;
   onClose: () => void;
   saving: boolean;
+  error: string | null;
 }) {
-  const canCreate =
-    state.name.trim().length > 0 && state.content.trim().length > 0;
-
+  const problem = formProblem(state);
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg overflow-visible sm:max-w-lg">
+      <DialogContent className="max-w-2xl overflow-visible sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create New Template</DialogTitle>
         </DialogHeader>
 
         <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto p-1.5">
-          <div className="flex flex-col gap-1.5">
-            <Label>
-              Template Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              placeholder="e.g., Helicopter Landing Zones"
-              value={state.name}
-              onChange={(e) => onChange({ ...state, name: e.target.value })}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label>Description (optional)</Label>
-            <Input
-              placeholder="Brief description of what this template analyses"
-              value={state.description}
-              onChange={(e) => onChange({ ...state, description: e.target.value })}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label>
-              Analysis Rules <span className="text-destructive">*</span>
-            </Label>
-            <Textarea
-              placeholder="Define the analysis rules and criteria..."
-              value={state.content}
-              onChange={(e) => onChange({ ...state, content: e.target.value })}
-              className="min-h-[220px] max-h-[360px] resize-y overflow-y-auto font-mono text-sm"
-            />
-          </div>
+          <TemplateFields state={state} onChange={onChange} />
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={onCreate} disabled={!canCreate || saving}>
-            {saving ? "Creating..." : "Create Template"}
-          </Button>
+        <DialogFooter className="sm:justify-between">
+          {problem ? <p className="text-xs text-muted-foreground">{problem}</p> : <span />}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={onCreate} disabled={saving || problem !== null}>
+              {saving ? "Creating..." : "Create Template"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

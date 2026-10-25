@@ -22,38 +22,32 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { OrganisationSearch } from "@/components/filters/organisation-search";
+import { StatusFilterMenu } from "@/components/filters/status-filter-menu";
 import { JobStatusBadge, JOB_STATUS_LABEL } from "@/components/jobs/job-status-badge";
 import { JobDetailsDialog } from "@/components/jobs/job-details-dialog";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { api } from "@/lib/api";
 import type { AppRole, JobOut, JobSummary, JobStatus, OrganizationOut } from "@/lib/api-types";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatTime } from "@/lib/format";
 
 const PAGE_SIZE = 15;
 
-const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: "all", label: "All statuses" },
-  { value: "pending", label: JOB_STATUS_LABEL.pending },
-  { value: "running", label: JOB_STATUS_LABEL.running },
-  { value: "ended", label: JOB_STATUS_LABEL.ended },
-  { value: "failed", label: JOB_STATUS_LABEL.failed },
-  { value: "awaiting_aip", label: JOB_STATUS_LABEL.awaiting_aip },
+const ALL_STATUSES: JobStatus[] = [
+  "pending",
+  "running",
+  "ended",
+  "closed",
+  "failed",
+  "awaiting_aip",
 ];
 
 // Number of columns varies by role — keep colSpan in sync
 function colCount(role: AppRole) {
-  if (role === "super-admin") return 8;
-  return 7;
+  if (role === "super-admin") return 9;
+  return 8;
 }
 
 export default function ViewJobsPage() {
@@ -63,8 +57,8 @@ export default function ViewJobsPage() {
   const showCreatedBy = true;
   const showOrg = role === "super-admin";
 
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [airportFilter, setAirportFilter] = useState("all");
+  const [statuses, setStatuses] = useState<Set<JobStatus>>(() => new Set(ALL_STATUSES));
+  const [airports, setAirports] = useState<Set<string> | null>(null);
   const [orgFilter, setOrgFilter] = useState<string | null>(null);
   const [organisations, setOrganisations] = useState<OrganizationOut[]>([]);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
@@ -109,21 +103,58 @@ export default function ViewJobsPage() {
     };
   }, [role]);
 
-  // Unique airport options derived from the loaded jobs
+  const scopedJobs = useMemo(
+    () => (orgFilter ? jobs.filter((j) => j.organization_id === orgFilter) : jobs),
+    [jobs, orgFilter]
+  );
+
+  const statusCounts = useMemo(() => {
+    const counts = Object.fromEntries(ALL_STATUSES.map((status) => [status, 0])) as Record<JobStatus, number>;
+    for (const job of scopedJobs) counts[job.status] += 1;
+    return counts;
+  }, [scopedJobs]);
+
+  // Unique airport options derived from the jobs in view
   const airportOptions = useMemo(() => {
     const seen = new Map<string, string>();
-    jobs.forEach((j) => {
+    const counts = new Map<string, number>();
+    scopedJobs.forEach((j) => {
+      counts.set(j.airport_icao, (counts.get(j.airport_icao) ?? 0) + 1);
       if (!seen.has(j.airport_icao)) {
         seen.set(j.airport_icao, j.airport_name ? `${j.airport_icao} — ${j.airport_name}` : j.airport_icao);
       }
     });
-    return Array.from(seen.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [jobs]);
+    return Array.from(seen.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([icao, label]) => ({ icao, label, count: counts.get(icao) ?? 0 }));
+  }, [scopedJobs]);
 
-  const filtered = jobs.filter((j) => {
-    if (statusFilter !== "all" && j.status !== statusFilter) return false;
-    if (airportFilter !== "all" && j.airport_icao !== airportFilter) return false;
-    if (orgFilter && j.organization_id !== orgFilter) return false;
+  const selectedAirports = airports ?? new Set(airportOptions.map((option) => option.icao));
+
+  function toggleStatus(status: JobStatus) {
+    setStatuses((current) => {
+      const next = new Set(current);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+    setPage(1);
+  }
+
+  function toggleAirport(icao: string) {
+    setAirports(() => {
+      const next = new Set(selectedAirports);
+      if (next.has(icao)) next.delete(icao);
+      else next.add(icao);
+      if (next.size === airportOptions.length) return null;
+      return next;
+    });
+    setPage(1);
+  }
+
+  const filtered = scopedJobs.filter((j) => {
+    if (!statuses.has(j.status)) return false;
+    if (airports && !airports.has(j.airport_icao)) return false;
     return true;
   });
 
@@ -194,62 +225,61 @@ export default function ViewJobsPage() {
                 value={orgFilter}
                 onChange={(orgId) => {
                   setOrgFilter(orgId);
+                  setAirports(null);
                   setPage(1);
                 }}
                 className="w-56"
               />
             )}
             {airportOptions.length > 1 && (
-              <Select
-                value={airportFilter}
-                onValueChange={(v) => {
-                  setAirportFilter(v);
+              <StatusFilterMenu
+                options={airportOptions.map((option) => ({
+                  value: option.icao,
+                  label: option.label,
+                  count: option.count,
+                }))}
+                selected={selectedAirports}
+                onToggle={toggleAirport}
+                onSelectAll={(selectAll) => {
+                  setAirports(selectAll ? null : new Set());
                   setPage(1);
                 }}
-              >
-                <SelectTrigger className="h-8 w-52 text-sm">
-                  <SelectValue placeholder="All airports" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All airports</SelectItem>
-                  {airportOptions.map(([icao, label]) => (
-                    <SelectItem key={icao} value={icao}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                className="w-72"
+                triggerLabel="Airports"
+                allLabel="All airports"
+                appliedNote
+              />
             )}
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => {
-                setStatusFilter(v);
+            <StatusFilterMenu
+              options={ALL_STATUSES.map((status) => ({
+                value: status,
+                label: JOB_STATUS_LABEL[status],
+                count: statusCounts[status],
+              }))}
+              selected={statuses}
+              onToggle={toggleStatus}
+              onSelectAll={(selectAll) => {
+                setStatuses(selectAll ? new Set(ALL_STATUSES) : new Set());
                 setPage(1);
               }}
-            >
-              <SelectTrigger className="h-8 w-44 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                    {opt.value === "all" ? ` (${jobs.length})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              triggerLabel="Statuses"
+              allLabel="All statuses"
+              appliedNote
+            />
           </div>
         </div>
 
         <Table className="table-fixed [&_th]:h-12 [&_th]:px-3 [&_td]:px-3 [&_td]:py-3">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[22%] pl-6">Job Title</TableHead>
-              <TableHead className="w-[14%]">Airport</TableHead>
-              <TableHead className="w-[14%]">Template</TableHead>
-              {showOrg && <TableHead className="w-[12%]">Organisation</TableHead>}
-              {showCreatedBy && <TableHead className="w-[14%]">Created by</TableHead>}
+              <TableHead className="w-[16%] pl-6">Job Title</TableHead>
+              <TableHead className="w-[11%]">Airport</TableHead>
+              <TableHead className="w-[11%]">Template</TableHead>
+              {showOrg && <TableHead className="w-[11%]">Organisation</TableHead>}
+              {showCreatedBy && <TableHead className="w-[11%]">Created by</TableHead>}
+              <TableHead className="w-[11%]">Final category</TableHead>
               <TableHead className="w-[10%]">Status</TableHead>
-              <TableHead className="w-[14%]">Created</TableHead>
+              <TableHead className="w-[13rem]">Created</TableHead>
               <TableHead className="w-12 pr-6" />
             </TableRow>
           </TableHeader>
@@ -309,13 +339,22 @@ export default function ViewJobsPage() {
                     </TableCell>
                   )}
                   <TableCell className="align-middle">
-                    <JobStatusBadge status={job.status as JobStatus} />
+                    <TruncatedText
+                      text={job.reviewed_category}
+                      fallback=""
+                      className="text-sm text-foreground"
+                    />
                   </TableCell>
                   <TableCell className="align-middle">
-                    <TruncatedText
-                      text={formatDateTime(job.created_at)}
-                      className="text-sm text-muted-foreground"
-                    />
+                    <JobStatusBadge status={job.status as JobStatus} />
+                  </TableCell>
+                  <TableCell className="w-[13rem] whitespace-normal align-middle">
+                    <p className="text-sm tabular-nums text-muted-foreground">
+                      {formatDate(job.created_at)}
+                    </p>
+                    <p className="text-sm tabular-nums text-muted-foreground">
+                      {formatTime(job.created_at)}
+                    </p>
                   </TableCell>
                   <TableCell className="pr-6 text-right">
                     <DropdownMenu>
@@ -396,6 +435,21 @@ export default function ViewJobsPage() {
         open={!!selectedJob}
         onClose={() => setSelectedJob(null)}
         onAcknowledged={(job) => setSelectedJob(job)}
+        onReviewed={(job) => {
+          setSelectedJob(job);
+          setJobs((prev) =>
+            prev.map((row) =>
+              row.id === job.id
+                ? {
+                    ...row,
+                    status: job.status,
+                    reviewed_category: job.reviewed_category,
+                    updated_at: job.updated_at,
+                  }
+                : row
+            )
+          );
+        }}
       />
     </div>
   );
