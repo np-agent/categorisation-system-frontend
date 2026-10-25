@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { UserManagement } from "@/components/users/user-management";
 import { api } from "@/lib/api";
@@ -42,6 +43,9 @@ export default function OrgDetailPage() {
 
   const [showEditName, setShowEditName] = useState(false);
   const [showToggleActive, setShowToggleActive] = useState(false);
+  const [instructions, setInstructions] = useState("");
+  const [savingInstructions, setSavingInstructions] = useState(false);
+  const [instructionsError, setInstructionsError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -53,6 +57,7 @@ export default function OrgDetailPage() {
       const activeIds = new Set(templatesData.map((t) => t.id));
       const cleaned = orgData.templates.filter((id) => activeIds.has(id));
       setOrg(orgData);
+      setInstructions(orgData.job_instructions ?? "");
       setPendingTemplates(new Set(cleaned));
       setTemplatesDirty(cleaned.length !== orgData.templates.length);
       setAllTemplates(templatesData);
@@ -93,6 +98,24 @@ export default function OrgDetailPage() {
       console.error(e);
     } finally {
       setSavingTemplates(false);
+    }
+  }
+
+  async function handleSaveInstructions() {
+    if (!org) return;
+    setSavingInstructions(true);
+    setInstructionsError(null);
+    try {
+      const updated = await api.patch<OrganizationOut>(
+        `/api/v1/organisations/${orgId}/instructions`,
+        { instructions }
+      );
+      setOrg(updated);
+      setInstructions(updated.job_instructions ?? "");
+    } catch (err) {
+      setInstructionsError(err instanceof Error ? err.message : "Could not save the instructions.");
+    } finally {
+      setSavingInstructions(false);
     }
   }
 
@@ -180,6 +203,35 @@ export default function OrgDetailPage() {
           </p>
         </div>
       )}
+
+      <section>
+        <div className="mb-3">
+          <h2 className="text-base font-semibold text-foreground">Instructions for all jobs</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Sent with every categorisation for this organisation. The category is still chosen from the template questions.
+          </p>
+        </div>
+        <Textarea
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          placeholder="How this organisation's jobs should be read"
+          className="min-h-[120px] text-sm md:text-sm"
+        />
+        {instructionsError && (
+          <p className="mt-2 text-sm text-destructive">{instructionsError}</p>
+        )}
+        <div className="mt-3">
+          <Button
+            size="sm"
+            onClick={handleSaveInstructions}
+            disabled={
+              savingInstructions || instructions.trim() === (org.job_instructions ?? "").trim()
+            }
+          >
+            {savingInstructions ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </section>
 
       {/* Templates Section */}
       <section>

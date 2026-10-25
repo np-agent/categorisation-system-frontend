@@ -21,6 +21,10 @@ const STATUS_CONFIG: Record<
     label: "Ended",
     className: "bg-green-100 text-green-700 hover:bg-green-100 border-green-200",
   },
+  closed: {
+    label: "Closed",
+    className: "bg-slate-100 text-slate-700 hover:bg-slate-100 border-slate-200",
+  },
   failed: {
     label: "Failed",
     className: "bg-red-100 text-red-700 hover:bg-red-100 border-red-200",
@@ -35,6 +39,7 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   pending: STATUS_CONFIG.pending.label,
   running: STATUS_CONFIG.running.label,
   ended: STATUS_CONFIG.ended.label,
+  closed: STATUS_CONFIG.closed.label,
   failed: STATUS_CONFIG.failed.label,
   awaiting_aip: STATUS_CONFIG.awaiting_aip.label,
 };
