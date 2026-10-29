@@ -118,6 +118,12 @@ export type JobFinalResult = {
   created_at: string;
 };
 
+export type ResultAuditEntry = JobFinalResult & {
+  saved_by_user_id: string;
+  saved_by_name: string;
+  saved_at: string;
+};
+
 export type JobOut = {
   id: string;
   title: string;
@@ -137,6 +143,7 @@ export type JobOut = {
   chunks: JobChunk[];
   synthesis: JobSynthesis | null;
   final_result: JobFinalResult | null;
+  result_audit: ResultAuditEntry[];
   reviewed_notes: string;
   reviewed_category: string;
   review_audit: ReviewAuditEntry[];

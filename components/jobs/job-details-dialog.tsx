@@ -17,6 +17,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import type { JobFinalResult, JobOut, QuestionAnswer } from "@/lib/api-types";
+
+type AnswerDraft = {
+  user_answer: "" | "yes" | "no";
+  user_evidence: string;
+};
 import { formatDateTime } from "@/lib/format";
 import { api } from "@/lib/api";
 
@@ -45,7 +50,37 @@ const CONFIDENCE_LABEL: Record<string, string> = {
   LOW: "Low",
 };
 
-function StructuredResult({ result }: { result: JobFinalResult }) {
+function AnswerPill({ value }: { value: string | null | undefined }) {
+  const label = ANSWER_LABEL[value ?? ""] ?? "Not found";
+  const tone =
+    value === "yes"
+      ? "bg-green-100 text-green-800"
+      : value === "no"
+        ? "bg-slate-100 text-slate-700"
+        : "bg-amber-100 text-amber-800";
+  return (
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>
+      {label}
+    </span>
+  );
+}
+
+function StructuredResult({
+  result,
+  drafts,
+  onDraft,
+  onRecheck,
+  rechecking,
+  recheckError,
+}: {
+  result: JobFinalResult;
+  drafts: Record<string, AnswerDraft>;
+  onDraft: (questionId: string, patch: Partial<AnswerDraft>) => void;
+  onRecheck: () => void;
+  rechecking: boolean;
+  recheckError: string | null;
+}) {
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
   const groups: { code: string; rows: QuestionAnswer[] }[] = [];
   for (const row of result.answers) {
     const last = groups[groups.length - 1];
@@ -55,6 +90,14 @@ function StructuredResult({ result }: { result: JobFinalResult }) {
       groups.push({ code: row.category_code, rows: [row] });
     }
   }
+
+  const changed = result.answers.some((row) => {
+    const draft = drafts[row.question_id];
+    return (
+      (draft?.user_answer ?? "") !== (row.user_answer ?? "") ||
+      (draft?.user_evidence ?? "") !== (row.user_evidence ?? "")
+    );
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -68,40 +111,111 @@ function StructuredResult({ result }: { result: JobFinalResult }) {
             Confidence: {CONFIDENCE_LABEL[result.confidence_level] ?? result.confidence_level}
           </p>
         )}
-        {!result.final_category && (
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            A category is met only when every question under it is yes.
-          </p>
-        )}
       </div>
 
       {groups.map((group) => (
         <section key={group.code}>
           <h4 className="mb-2 text-sm font-semibold text-foreground">{group.code}</h4>
           <div className="flex flex-col gap-2">
-            {group.rows.map((row) => (
-              <div key={row.question_id} className="rounded-lg border px-3 py-2.5">
-                <p className="text-sm font-medium text-foreground">{row.question_text}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {ANSWER_LABEL[row.answer ?? ""] ?? "Not found"}
-                  {row.confidence_level
-                    ? ` · ${CONFIDENCE_LABEL[row.confidence_level] ?? row.confidence_level}`
-                    : ""}
-                  {row.page ? ` · page ${row.page}` : ""}
-                </p>
-                {row.evidence && (
-                  <p className="mt-1 text-sm leading-relaxed text-foreground">{row.evidence}</p>
-                )}
-                {row.needs_manual && (
-                  <p className="mt-1 text-xs font-medium text-amber-700">
-                    A person needs to check this.
+            {group.rows.map((row) => {
+              const draft = drafts[row.question_id] ?? { user_answer: "" as const, user_evidence: "" };
+              const waiting = row.needs_manual && !draft.user_answer;
+              const showEditor = waiting || Boolean(draft.user_answer) || opened[row.question_id];
+              return (
+                <div
+                  key={row.question_id}
+                  className={
+                    waiting
+                      ? "rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5"
+                      : "rounded-lg border px-3 py-2.5"
+                  }
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Question</p>
+                      <p className="mt-0.5 text-sm font-medium text-foreground">{row.question_text}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <p className="text-xs text-muted-foreground">Original answer</p>
+                      <div className="flex items-center gap-1">
+                        <AnswerPill value={row.answer} />
+                        {row.confidence_level && (
+                          <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
+                            {CONFIDENCE_LABEL[row.confidence_level] ?? row.confidence_level}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-foreground">
+                    <span className="text-muted-foreground">Evidence: </span>
+                    {row.evidence || "None"}
                   </p>
-                )}
-              </div>
-            ))}
+                  <p className="mt-1 text-sm text-foreground">
+                    <span className="text-muted-foreground">Page: </span>
+                    {row.page ?? "None"}
+                  </p>
+                  {showEditor ? (
+                    <div className="mt-3 border-t pt-3">
+                      <p className="text-xs text-muted-foreground">Your answer</p>
+                      <div className="mt-1.5 flex gap-2">
+                        {(["yes", "no"] as const).map((choice) => (
+                          <button
+                            key={choice}
+                            type="button"
+                            onClick={() =>
+                              onDraft(row.question_id, {
+                                user_answer: draft.user_answer === choice ? "" : choice,
+                                user_evidence: draft.user_answer === choice ? "" : draft.user_evidence,
+                              })
+                            }
+                            className={
+                              draft.user_answer === choice
+                                ? "rounded-md border border-primary bg-primary/10 px-3 py-1 text-xs font-medium text-foreground"
+                                : "rounded-md border px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
+                            }
+                          >
+                            {choice === "yes" ? "Yes" : "No"}
+                          </button>
+                        ))}
+                      </div>
+                      <Input
+                        value={draft.user_evidence}
+                        onChange={(e) => onDraft(row.question_id, { user_evidence: e.target.value })}
+                        placeholder="Short note"
+                        className="mt-2 text-sm md:text-sm"
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mt-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+                      onClick={() => setOpened((current) => ({ ...current, [row.question_id]: true }))}
+                    >
+                      Change answer
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
       ))}
+
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-xs text-muted-foreground">
+          Change an answer above to update the suggested category.
+        </p>
+        {recheckError && <p className="text-sm text-destructive">{recheckError}</p>}
+        <Button
+          type="button"
+          size="sm"
+          onClick={onRecheck}
+          disabled={rechecking || !changed}
+        >
+          {rechecking ? "Re-checking..." : "Re-check category"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -152,6 +266,9 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
   const [finalCategory, setFinalCategory] = useState("");
   const [savingReview, setSavingReview] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, AnswerDraft>>({});
+  const [rechecking, setRechecking] = useState(false);
+  const [recheckError, setRecheckError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -161,8 +278,17 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
       setNotes(job?.reviewed_notes ?? "");
       setFinalCategory(job?.reviewed_category ?? "");
       setReviewError(null);
+      setRecheckError(null);
+      const next: Record<string, AnswerDraft> = {};
+      for (const row of job?.final_result?.answers ?? []) {
+        next[row.question_id] = {
+          user_answer: row.user_answer ?? "",
+          user_evidence: row.user_evidence ?? "",
+        };
+      }
+      setDrafts(next);
     }
-  }, [open, job?.id, job?.advisory_acknowledged, job?.reviewed_notes, job?.reviewed_category]);
+  }, [open, job?.id, job?.advisory_acknowledged, job?.reviewed_notes, job?.reviewed_category, job?.final_result]);
 
   if (!job) return null;
 
@@ -172,6 +298,45 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
     latestResult && !latestResult.error && (hasAnswers || latestResult.raw_text)
   );
   const showAdvisory = hasResult && ack === "pending";
+
+  function updateDraft(questionId: string, patch: Partial<AnswerDraft>) {
+    setDrafts((current) => ({
+      ...current,
+      [questionId]: {
+        user_answer: current[questionId]?.user_answer ?? "",
+        user_evidence: current[questionId]?.user_evidence ?? "",
+        ...patch,
+      },
+    }));
+  }
+
+  async function handleRecheck() {
+    if (!job?.final_result) return;
+    const missingNote = job.final_result.answers.find((row) => {
+      const draft = drafts[row.question_id];
+      return draft?.user_evidence.trim() && !draft.user_answer;
+    });
+    if (missingNote) {
+      setRecheckError("Choose yes or no for each note you add.");
+      return;
+    }
+    setRechecking(true);
+    setRecheckError(null);
+    try {
+      const updated = await api.patch<JobOut>(`/api/v1/jobs/${job.id}/answers`, {
+        answers: job.final_result.answers.map((row) => ({
+          question_id: row.question_id,
+          user_answer: drafts[row.question_id]?.user_answer || null,
+          user_evidence: drafts[row.question_id]?.user_evidence ?? "",
+        })),
+      });
+      onReviewed?.(updated);
+    } catch (err) {
+      setRecheckError(err instanceof Error ? err.message : "Could not re-check the category.");
+    } finally {
+      setRechecking(false);
+    }
+  }
 
   async function handleSaveReview() {
     if (!job) return;
@@ -281,11 +446,21 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
                   <section>
                     <h3 className="mb-3 text-sm font-semibold text-foreground">Results</h3>
                     {hasAnswers ? (
-                      <StructuredResult result={latestResult} />
+                      <>
+                        <StructuredResult
+                          result={latestResult}
+                          drafts={drafts}
+                          onDraft={updateDraft}
+                          onRecheck={handleRecheck}
+                          rechecking={rechecking}
+                          recheckError={recheckError}
+                        />
+                      </>
                     ) : (
                       latestResult.raw_text && <ResultMarkdown text={latestResult.raw_text} />
                     )}
-                    <div className="mt-6 flex flex-col gap-4">
+                    <div className="mt-2 flex flex-col gap-4 rounded-lg border p-4">
+                      <h3 className="text-sm font-semibold text-foreground">Close job</h3>
                       <div className="flex flex-col gap-1.5">
                         <Label htmlFor="review-notes">Notes</Label>
                         <Textarea
