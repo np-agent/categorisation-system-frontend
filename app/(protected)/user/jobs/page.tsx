@@ -274,10 +274,10 @@ export default function ViewJobsPage() {
             <TableRow className="hover:bg-transparent">
               <TableHead className="w-[16%] pl-6">Job Title</TableHead>
               <TableHead className="w-[11%]">Airport</TableHead>
+              <TableHead className="w-[11%]">Final category</TableHead>
               <TableHead className="w-[11%]">Template</TableHead>
               {showOrg && <TableHead className="w-[11%]">Organisation</TableHead>}
               {showCreatedBy && <TableHead className="w-[11%]">Created by</TableHead>}
-              <TableHead className="w-[11%]">Final category</TableHead>
               <TableHead className="w-[10%]">Status</TableHead>
               <TableHead className="w-[13rem]">Created</TableHead>
               <TableHead className="w-12 pr-6" />
@@ -318,6 +318,13 @@ export default function ViewJobsPage() {
                   </TableCell>
                   <TableCell className="align-middle">
                     <TruncatedText
+                      text={job.reviewed_category}
+                      fallback=""
+                      className="text-sm text-foreground"
+                    />
+                  </TableCell>
+                  <TableCell className="align-middle">
+                    <TruncatedText
                       text={job.template_name}
                       className="text-sm text-muted-foreground"
                     />
@@ -338,13 +345,6 @@ export default function ViewJobsPage() {
                       />
                     </TableCell>
                   )}
-                  <TableCell className="align-middle">
-                    <TruncatedText
-                      text={job.reviewed_category}
-                      fallback=""
-                      className="text-sm text-foreground"
-                    />
-                  </TableCell>
                   <TableCell className="align-middle">
                     <JobStatusBadge status={job.status as JobStatus} />
                   </TableCell>
