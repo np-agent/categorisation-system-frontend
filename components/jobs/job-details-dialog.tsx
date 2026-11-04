@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -269,26 +271,69 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
   const [drafts, setDrafts] = useState<Record<string, AnswerDraft>>({});
   const [rechecking, setRechecking] = useState(false);
   const [recheckError, setRecheckError] = useState<string | null>(null);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [savedNotice, setSavedNotice] = useState(false);
+  const categoryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open) {
-      setAck(job?.advisory_acknowledged ? "accepted" : "pending");
-      setChecked(false);
-      setSubmitting(false);
-      setNotes(job?.reviewed_notes ?? "");
-      setFinalCategory(job?.reviewed_category ?? "");
-      setReviewError(null);
-      setRecheckError(null);
-      const next: Record<string, AnswerDraft> = {};
-      for (const row of job?.final_result?.answers ?? []) {
-        next[row.question_id] = {
-          user_answer: row.user_answer ?? "",
-          user_evidence: row.user_evidence ?? "",
-        };
-      }
-      setDrafts(next);
+    if (!open) {
+      setSavedNotice(false);
+      setCategoryOpen(false);
+      return;
     }
-  }, [open, job?.id, job?.advisory_acknowledged, job?.reviewed_notes, job?.reviewed_category, job?.final_result]);
+    setCategoryOpen(false);
+    setAck(job?.advisory_acknowledged ? "accepted" : "pending");
+    setChecked(false);
+    setSubmitting(false);
+    setNotes(job?.reviewed_notes ?? "");
+    setFinalCategory(job?.reviewed_category ?? "");
+    setReviewError(null);
+    setRecheckError(null);
+    const next: Record<string, AnswerDraft> = {};
+    for (const row of job?.final_result?.answers ?? []) {
+      next[row.question_id] = {
+        user_answer: row.user_answer ?? "",
+        user_evidence: row.user_evidence ?? "",
+      };
+    }
+    setDrafts(next);
+    // Saving the same job updates these fields. Keep that from clearing the notice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, job?.id]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    api
+      .get<string[]>("/api/v1/jobs/final-categories")
+      .then((values) => {
+        if (!cancelled) setCategoryOptions(values);
+      })
+      .catch((err) => {
+        console.error("Failed to load final categories:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!categoryOpen) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!categoryRef.current?.contains(event.target as Node)) {
+        setCategoryOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [categoryOpen]);
+
+  useEffect(() => {
+    if (!savedNotice) return;
+    const timer = window.setTimeout(() => setSavedNotice(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [savedNotice]);
 
   if (!job) return null;
 
@@ -349,6 +394,7 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
         close: job.status === "ended",
       });
       onReviewed?.(updated);
+      setSavedNotice(true);
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : "Could not save the review.");
     } finally {
@@ -370,7 +416,12 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
     }
   }
 
+  const categoryChoices = categoryOptions.includes(finalCategory) || !finalCategory
+    ? categoryOptions
+    : [finalCategory, ...categoryOptions];
+
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-h-[85vh] w-full max-w-3xl overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="px-6 pt-6">
@@ -472,16 +523,67 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <Label htmlFor="review-category">Final category</Label>
-                        <Input
-                          id="review-category"
-                          value={finalCategory}
-                          onChange={(e) => setFinalCategory(e.target.value)}
-                          className="text-sm md:text-sm"
-                        />
+                        <div ref={categoryRef}>
+                          <button
+                            id="review-category"
+                            type="button"
+                            aria-expanded={categoryOpen}
+                            aria-haspopup="listbox"
+                            onClick={() => setCategoryOpen((current) => !current)}
+                            className="flex h-8 w-full items-center justify-between rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                          >
+                            <span className={finalCategory ? "text-foreground" : "text-muted-foreground"}>
+                              {finalCategory || "Select a category"}
+                            </span>
+                            <ChevronDownIcon className="size-4 text-muted-foreground" />
+                          </button>
+                          {categoryOpen && (
+                            <ul
+                              role="listbox"
+                              className="mt-1 max-h-52 overflow-y-auto rounded-lg bg-popover p-1 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
+                              onWheel={(event) => event.stopPropagation()}
+                            >
+                              {categoryChoices.map((value) => {
+                                const selected = value === finalCategory;
+                                return (
+                                  <li key={value}>
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={selected}
+                                      onClick={() => {
+                                        setFinalCategory(value);
+                                        setCategoryOpen(false);
+                                      }}
+                                      className={
+                                        selected
+                                          ? "flex w-full items-center justify-between rounded-md bg-accent px-2 py-1.5 text-left text-accent-foreground"
+                                          : "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground"
+                                      }
+                                    >
+                                      {value}
+                                      {selected && <CheckIcon className="size-4" />}
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          If the value you need is not listed, please contact SelfBrief support at{" "}
+                          <a
+                            href="mailto:support@selfbrief.aero"
+                            className="font-medium text-foreground underline underline-offset-2"
+                          >
+                            support@selfbrief.aero
+                          </a>
+                          .
+                        </p>
                       </div>
                       {job.status === "ended" && !finalCategory.trim() && (
                         <p className="text-sm text-muted-foreground">
-                          Enter a final category to close the job.
+                          Select a final category to close the job.
                         </p>
                       )}
                       {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
@@ -611,5 +713,15 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
         )}
       </DialogContent>
     </Dialog>
+    {savedNotice && createPortal(
+      <div
+        role="status"
+        className="fixed right-4 bottom-4 z-[200] rounded-lg border bg-card px-4 py-3 text-sm text-foreground shadow-lg"
+      >
+        Changes saved
+      </div>,
+      document.body,
+    )}
+    </>
   );
 }
