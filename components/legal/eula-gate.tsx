@@ -57,7 +57,7 @@ export function EulaGate({ isUpdate, onAccepted }: EulaGateProps) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-sidebar p-4">
+    <div className="flex min-h-screen items-center justify-center bg-[#1a2f4c] p-4">
       <div className="w-full max-w-lg">
         <div className="mb-7 flex w-full flex-col items-center">
           <BrandLogo className="w-[70%] translate-x-[6%]" priority />
