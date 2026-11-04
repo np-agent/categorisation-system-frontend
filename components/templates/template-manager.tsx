@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   CheckIcon,
+  GripVerticalIcon,
   InfoIcon,
   PencilIcon,
   PlusIcon,
@@ -498,6 +499,43 @@ function TemplateRow({
   );
 }
 
+function moveQuestion(
+  questions: FormQuestion[],
+  fromId: string,
+  toId: string,
+  place: "before" | "after",
+): FormQuestion[] {
+  if (fromId === toId) return questions;
+  const from = questions.findIndex((question) => question.id === fromId);
+  if (from < 0) return questions;
+  const moving = questions[from];
+  const next = questions.filter((question) => question.id !== fromId);
+  let insertAt = next.findIndex((question) => question.id === toId);
+  if (insertAt < 0) return questions;
+  if (place === "after") insertAt += 1;
+  next.splice(insertAt, 0, moving);
+  return next;
+}
+
+function dropPlace(event: { clientY: number; currentTarget: HTMLDivElement }): "before" | "after" {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  return event.clientY > bounds.top + bounds.height / 2 ? "after" : "before";
+}
+
+function resolvePlace(
+  questions: FormQuestion[],
+  fromId: string,
+  toId: string,
+  event: { clientY: number; currentTarget: HTMLDivElement },
+): "before" | "after" {
+  const from = questions.findIndex((question) => question.id === fromId);
+  const to = questions.findIndex((question) => question.id === toId);
+  // The row under the last question is not a drop target, so landing anywhere
+  // on that last row while moving down means "make this the last question".
+  if (from >= 0 && to === questions.length - 1 && from < to) return "after";
+  return dropPlace(event);
+}
+
 function updateCategory(state: EditingState, categoryId: string, next: FormCategory): EditingState {
   return {
     ...state,
@@ -512,6 +550,24 @@ function TemplateFields({
   state: EditingState;
   onChange: (s: EditingState) => void;
 }) {
+  const dragRef = useRef<{ categoryId: string; questionId: string } | null>(null);
+  const [dragging, setDragging] = useState<{ categoryId: string; questionId: string } | null>(null);
+  const [over, setOver] = useState<{ questionId: string; place: "before" | "after" } | null>(null);
+
+  function dropQuestion(category: FormCategory, targetId: string, place: "before" | "after") {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setDragging(null);
+    setOver(null);
+    if (!drag || drag.categoryId !== category.id) return;
+    onChange(
+      updateCategory(state, category.id, {
+        ...category,
+        questions: moveQuestion(category.questions, drag.questionId, targetId, place),
+      })
+    );
+  }
+
   return (
     <>
       <div className="flex flex-col gap-1.5">
@@ -600,7 +656,62 @@ function TemplateFields({
 
             <div className="flex flex-col gap-2">
               {category.questions.map((question, questionIndex) => (
-                <div key={question.id} className="flex items-start gap-2">
+                <div
+                  key={question.id}
+                  data-question-row
+                  onDragOver={(event) => {
+                    const drag = dragRef.current;
+                    if (!drag || drag.categoryId !== category.id || drag.questionId === question.id) return;
+                    event.preventDefault();
+                    const place = resolvePlace(category.questions, drag.questionId, question.id, event);
+                    setOver((current) =>
+                      current?.questionId === question.id && current.place === place
+                        ? current
+                        : { questionId: question.id, place }
+                    );
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const drag = dragRef.current;
+                    const place = drag
+                      ? resolvePlace(category.questions, drag.questionId, question.id, event)
+                      : dropPlace(event);
+                    dropQuestion(category, question.id, place);
+                  }}
+                  className={cn(
+                    "relative flex items-start gap-2 rounded-md",
+                    dragging?.questionId === question.id && dragging.categoryId === category.id && "bg-primary/5 opacity-40 ring-1 ring-primary/40"
+                  )}
+                >
+                  {over?.questionId === question.id && over.place === "before" && (
+                    <span className="pointer-events-none absolute -top-1.5 right-0 left-8 h-0.5 rounded-full bg-primary" />
+                  )}
+                  {over?.questionId === question.id && over.place === "after" && questionIndex < category.questions.length - 1 && (
+                    <span className="pointer-events-none absolute -bottom-1.5 right-0 left-8 h-0.5 rounded-full bg-primary" />
+                  )}
+                  <button
+                    type="button"
+                    draggable
+                    aria-label="Drag to reorder this question"
+                    onDragStart={(event) => {
+                      const row = event.currentTarget.closest("[data-question-row]");
+                      if (row instanceof HTMLElement) {
+                        event.dataTransfer.setDragImage(row, 24, 18);
+                      }
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", question.id);
+                      dragRef.current = { categoryId: category.id, questionId: question.id };
+                      setDragging({ categoryId: category.id, questionId: question.id });
+                    }}
+                    onDragEnd={() => {
+                      dragRef.current = null;
+                      setDragging(null);
+                      setOver(null);
+                    }}
+                    className="mt-2 cursor-grab rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                  >
+                    <GripVerticalIcon className="size-3.5" />
+                  </button>
                   <span className="mt-2 w-6 shrink-0 text-xs text-muted-foreground">
                     {questionIndex + 1}.
                     {index === 0 && questionIndex === 0 && (
@@ -641,6 +752,37 @@ function TemplateFields({
                   )}
                 </div>
               ))}
+              {dragging?.categoryId === category.id &&
+                dragging.questionId !== category.questions[category.questions.length - 1]?.id && (
+                <div
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    const lastId = category.questions[category.questions.length - 1]?.id;
+                    if (!lastId) return;
+                    setOver((current) =>
+                      current?.questionId === lastId && current.place === "after"
+                        ? current
+                        : { questionId: lastId, place: "after" }
+                    );
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const lastId = category.questions[category.questions.length - 1]?.id;
+                    if (lastId) dropQuestion(category, lastId, "after");
+                  }}
+                  className="flex h-6 items-center"
+                >
+                  <span
+                    className={cn(
+                      "ml-8 h-0.5 flex-1 rounded-full",
+                      over?.place === "after" &&
+                        over.questionId === category.questions[category.questions.length - 1]?.id
+                        ? "bg-primary"
+                        : "bg-primary/30"
+                    )}
+                  />
+                </div>
+              )}
             </div>
 
             <Button

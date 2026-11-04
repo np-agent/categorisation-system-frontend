@@ -208,7 +208,7 @@ export default function OrgDetailPage() {
         <div className="mb-3">
           <h2 className="text-base font-semibold text-foreground">Instructions for all jobs</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Sent with every categorisation for this organisation. The category is still chosen from the template questions.
+            This prompt is for internal AI processing only and will not be displayed to end users when viewing the calculations, workings, or final results. It will be used with every categorisation job created within this organisation. The category is still chosen from the template questions.
           </p>
         </div>
         <Textarea
