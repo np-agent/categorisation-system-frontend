@@ -513,7 +513,10 @@ export function JobDetailsDialog({ job, open, onClose, onAcknowledged, onReviewe
                     <div className="mt-2 flex flex-col gap-4 rounded-lg border p-4">
                       <h3 className="text-sm font-semibold text-foreground">Close job</h3>
                       <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="review-notes">Notes</Label>
+                        <Label htmlFor="review-notes" className="gap-1">
+                          Notes
+                          <span className="font-light text-muted-foreground">(optional)</span>
+                        </Label>
                         <Textarea
                           id="review-notes"
                           value={notes}
